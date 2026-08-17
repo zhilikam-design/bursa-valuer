@@ -11,6 +11,7 @@ interface ModelComparisonCardProps {
   modelFull: string;
   recommended: boolean;
   active: boolean;
+  applicable?: boolean;
   fairValue: number;
   upsidePct: number;
   marginOfSafetyPct: number;
@@ -23,6 +24,7 @@ export function ModelComparisonCard({
   modelFull,
   recommended,
   active,
+  applicable = true,
   fairValue,
   upsidePct,
   marginOfSafetyPct,
@@ -61,31 +63,41 @@ export function ModelComparisonCard({
       </div>
 
       <div className="mt-3 text-xl font-bold tabular-nums">
-        {formatMoney(fairValue)}
+        {applicable ? formatMoney(fairValue) : "N/A"}
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-        <div>
-          <div className="text-muted-foreground">{t("result.upside")}</div>
-          <div
-            className={cn(
-              "font-semibold tabular-nums",
-              upsidePct >= 0 ? "text-up" : "text-down",
-            )}
-          >
-            {formatPercentPts(upsidePct, 1, true)}
+      {applicable ? (
+        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <div className="text-muted-foreground">{t("result.upside")}</div>
+            <div
+              className={cn(
+                "font-semibold tabular-nums",
+                upsidePct >= 0 ? "text-up" : "text-down",
+              )}
+            >
+              {formatPercentPts(upsidePct, 1, true)}
+            </div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">{t("result.margin")}</div>
+            <div className="font-semibold tabular-nums">
+              {formatPercentPts(marginOfSafetyPct, 1)}
+            </div>
           </div>
         </div>
-        <div>
-          <div className="text-muted-foreground">{t("result.margin")}</div>
-          <div className="font-semibold tabular-nums">
-            {formatPercentPts(marginOfSafetyPct, 1)}
-          </div>
+      ) : (
+        <div className="mt-2 text-xs text-muted-foreground">
+          {t("pe.notApplicable")}
         </div>
-      </div>
+      )}
 
       <div className="mt-3">
-        <Badge variant={verdictVariant}>{t(`verdict.${verdict}`)}</Badge>
+        {applicable ? (
+          <Badge variant={verdictVariant}>{t(`verdict.${verdict}`)}</Badge>
+        ) : (
+          <Badge variant="outline">N/A</Badge>
+        )}
       </div>
     </div>
   );

@@ -76,7 +76,7 @@ function DashboardInner({ data }: ValuationDashboardProps) {
   );
 
   // PE
-  const [eps, setEps] = useState<number>(data.seed?.eps ?? 0.1);
+  const [eps, setEps] = useState<number>(quote.eps ?? data.seed?.eps ?? 0);
   const [peLow, setPeLow] = useState<number>(preset.peLow);
   const [peBase, setPeBase] = useState<number>(preset.peBase);
   const [peHigh, setPeHigh] = useState<number>(preset.peHigh);
@@ -141,7 +141,9 @@ function DashboardInner({ data }: ValuationDashboardProps) {
   const bandData = [
     { model: t("model.dcf"), fairValue: result.dcf?.fairValuePerShare ?? 0 },
     { model: t("model.ddm"), fairValue: result.ddm?.fairValuePerShare ?? 0 },
-    { model: t("model.pe"), fairValue: result.pe?.fairValueBase ?? 0 },
+    ...(result.pe?.applicable
+      ? [{ model: t("model.pe"), fairValue: result.pe.fairValueBase }]
+      : []),
   ];
 
   function onSectorChange(s: Sector) {
@@ -284,13 +286,22 @@ function DashboardInner({ data }: ValuationDashboardProps) {
             <div>
               <div className="text-xs text-muted-foreground">EPS</div>
               <div className="mt-1 rounded-md bg-muted/60 px-2 py-1.5 text-sm font-mono tabular-nums">
-                {formatMoney(quote.eps, 2)}
+                {quote.eps == null ? (
+                  t("stock.na")
+                ) : (
+                  <span className={quote.eps < 0 ? "text-down" : undefined}>
+                    {formatMoney(quote.eps, 2)}
+                    {quote.eps < 0 ? ` ${t("stock.loss")}` : ""}
+                  </span>
+                )}
               </div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground">P/E</div>
               <div className="mt-1 rounded-md bg-muted/60 px-2 py-1.5 text-sm font-mono tabular-nums">
-                {quote.pe > 0 ? `${quote.pe.toFixed(1)}×` : "—"}
+                {quote.eps != null && quote.eps > 0
+                  ? (quote.pe ?? price / quote.eps).toFixed(1) + "×"
+                  : t("stock.na")}
               </div>
             </div>
           </div>
@@ -430,10 +441,15 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                   </TabsContent>
 
                   <TabsContent value="pe" className="space-y-4 pt-4">
+                    {eps <= 0 && (
+                      <div className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
+                        {t("pe.notApplicable")}
+                      </div>
+                    )}
                     <AssumptionSlider
                       label={t("pe.eps")}
                       value={eps}
-                      min={0}
+                      min={-5}
                       max={10}
                       step={0.01}
                       onChange={setEps}
@@ -516,6 +532,7 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                   modelFull={t("model.pe.full")}
                   recommended={result.primary === "pe"}
                   active={activeModel === "pe"}
+                  applicable={result.pe?.applicable ?? false}
                   fairValue={result.pe?.fairValueBase ?? 0}
                   upsidePct={result.pe?.upsidePct ?? 0}
                   marginOfSafetyPct={result.pe?.marginOfSafetyPct ?? 0}
