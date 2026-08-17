@@ -215,14 +215,31 @@ function DashboardInner({ data }: ValuationDashboardProps) {
               <p className="text-sm text-muted-foreground">
                 {quote.code} · {quote.ticker}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t("stock.dataSource")}:{" "}
-                {data.source === "yahoo"
-                  ? t("stock.live")
-                  : data.seed
-                    ? t("stock.demo")
-                    : t("stock.unknown")}
-              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>
+                  {t("stock.dataSource")}:{" "}
+                  {[
+                    data.dataSources.yahoo ? t("stock.yahoo") : null,
+                    data.dataSources.fmp ? t("stock.fmp") : null,
+                    data.dataSources.seed ? t("stock.demo") : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" + ") || t("stock.unknown")}
+                </span>
+                {data.epsAgreement !== "none" && (
+                  <Badge
+                    variant={
+                      data.epsAgreement === "agree"
+                        ? "buy"
+                        : data.epsAgreement === "mixed"
+                          ? "hold"
+                          : "secondary"
+                    }
+                  >
+                    EPS: {t(`stock.${data.epsAgreement}`)}
+                  </Badge>
+                )}
+              </div>
             </div>
             <div className="flex flex-col items-end gap-1">
               <div className="flex items-center gap-2">
