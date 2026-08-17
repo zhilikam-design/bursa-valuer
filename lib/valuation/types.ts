@@ -71,6 +71,7 @@ export interface PeBandInputs {
 
 export interface PeBandResult {
   model: "pe";
+  applicable: boolean; // false when normalized EPS <= 0 (loss-making)
   fairValueLow: number;
   fairValueBase: number;
   fairValueHigh: number;

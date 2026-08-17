@@ -35,7 +35,11 @@ export function runValuation(input: RunValuationInput): ValuationResult {
   const ddmRes: DdmResult | null = computeDdm(ddm, price);
   const peRes: PeBandResult | null = computePeBand(pe, price);
 
-  const primary: ModelId = SECTOR_PRESETS[sector]?.primaryModel ?? "dcf";
+  let primary: ModelId = SECTOR_PRESETS[sector]?.primaryModel ?? "dcf";
+  // PE band is meaningless for loss-making counters (EPS <= 0) — fall back to DCF.
+  if (primary === "pe" && peRes && !peRes.applicable) {
+    primary = dcfRes ? "dcf" : "ddm";
+  }
 
   const primaryResult =
     primary === "dcf" ? dcfRes : primary === "ddm" ? ddmRes : peRes;
@@ -52,7 +56,7 @@ export function runValuation(input: RunValuationInput): ValuationResult {
   const values: number[] = [
     dcfRes?.fairValuePerShare,
     ddmRes?.fairValuePerShare,
-    peRes?.fairValueBase,
+    peRes?.applicable ? peRes.fairValueBase : undefined,
   ].filter((v): v is number => typeof v === "number" && isFinite(v) && v > 0);
 
   const blendedFairValue =

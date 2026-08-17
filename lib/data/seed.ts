@@ -11,8 +11,8 @@ export interface YahooQuote {
   previousClose: number;
   changePct: number; // percent points, e.g. 1.25 = +1.25%
   marketCap: number; // RM
-  eps: number; // RM
-  pe: number;
+  eps: number | null; // RM (null = unknown; negative = loss-making)
+  pe: number | null; // null when EPS <= 0 or unknown
   dividendYieldPct: number; // percent points, e.g. 5.9 = 5.9%
 }
 

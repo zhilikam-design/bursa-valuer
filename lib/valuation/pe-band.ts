@@ -14,6 +14,22 @@ import { marginOfSafetyPct, upsidePct, verdictFromUpside } from "./verdict";
 export function computePeBand(inputs: PeBandInputs, price: number): PeBandResult {
   const { normalizedEps, peLow, peBase, peHigh } = inputs;
 
+  const applicable = normalizedEps > 0;
+  if (!applicable) {
+    // Loss-making: PE multiples are meaningless on negative earnings.
+    return {
+      model: "pe",
+      applicable,
+      fairValueLow: 0,
+      fairValueBase: 0,
+      fairValueHigh: 0,
+      upsidePct: 0,
+      marginOfSafetyPct: 0,
+      verdict: "hold",
+      breakdown: [],
+    };
+  }
+
   const fairValueLow = normalizedEps * peLow;
   const fairValueBase = normalizedEps * peBase;
   const fairValueHigh = normalizedEps * peHigh;
@@ -23,6 +39,7 @@ export function computePeBand(inputs: PeBandInputs, price: number): PeBandResult
 
   return {
     model: "pe",
+    applicable,
     fairValueLow,
     fairValueBase,
     fairValueHigh,

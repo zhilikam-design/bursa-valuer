@@ -57,9 +57,60 @@ export async function fetchYahooQuote(
       previousClose,
       changePct,
       marketCap: typeof meta.marketCap === "number" ? meta.marketCap : 0,
-      eps: seed?.eps ?? 0,
-      pe: typeof meta.trailingPE === "number" ? meta.trailingPE : seed?.pe ?? 0,
+      eps: null,
+      pe: null,
       dividendYieldPct: seed?.dividendYieldPct ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export interface YahooFinancials {
+  eps: number | null; // may be negative for loss-making counters
+  pe: number | null; // null when EPS <= 0 or unknown
+  dividendYieldPct: number | null; // percent points
+}
+
+/**
+ * Fetch trailing EPS / P/E / dividend yield from Yahoo's quoteSummary
+ * endpoint. Returns null when the endpoint is unavailable (it is often
+ * rate-limited without a crumb), in which case we fall back to seed or null.
+ */
+export async function fetchYahooFinancials(
+  rawTicker: string,
+): Promise<YahooFinancials | null> {
+  const ticker = normalizeTicker(rawTicker);
+  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(
+    ticker,
+  )}?modules=summaryDetail,defaultKeyStatistics`;
+
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": UA, Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) return null;
+
+    const json = await res.json();
+    const result = json?.quoteSummary?.result?.[0];
+    if (!result) return null;
+
+    const stats = result.defaultKeyStatistics ?? {};
+    const detail = result.summaryDetail ?? {};
+
+    const epsRaw = stats.trailingEps?.raw;
+    const peRaw = detail.trailingPE?.raw;
+    const divYieldRaw = detail.dividendYield?.raw; // fraction, e.g. 0.059
+
+    return {
+      eps: typeof epsRaw === "number" && isFinite(epsRaw) ? epsRaw : null,
+      pe: typeof peRaw === "number" && isFinite(peRaw) ? peRaw : null,
+      dividendYieldPct:
+        typeof divYieldRaw === "number" && isFinite(divYieldRaw)
+          ? divYieldRaw * 100
+          : null,
     };
   } catch {
     return null;
@@ -88,8 +139,16 @@ export async function getStockData(rawTicker: string): Promise<StockData> {
   const seed = SEED_MAP[code] ?? null;
 
   const yahoo = await fetchYahooQuote(rawTicker);
+  const fin = await fetchYahooFinancials(rawTicker);
   if (yahoo) {
-    return { ticker: yahoo.ticker, code, quote: yahoo, seed, source: "yahoo" };
+    const quote: YahooQuote = {
+      ...yahoo,
+      eps: fin?.eps ?? seed?.eps ?? null,
+      pe: fin?.pe ?? seed?.pe ?? null,
+      dividendYieldPct:
+        fin?.dividendYieldPct ?? seed?.dividendYieldPct ?? 0,
+    };
+    return { ticker: yahoo.ticker, code, quote, seed, source: "yahoo" };
   }
 
   if (seed) {
@@ -118,8 +177,8 @@ export async function getStockData(rawTicker: string): Promise<StockData> {
       previousClose: 0,
       changePct: 0,
       marketCap: 0,
-      eps: 0,
-      pe: 0,
+      eps: null,
+      pe: null,
       dividendYieldPct: 0,
     },
     seed: null,
