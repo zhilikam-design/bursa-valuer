@@ -80,6 +80,7 @@ function DashboardInner({ data }: ValuationDashboardProps) {
   const [peLow, setPeLow] = useState<number>(preset.peLow);
   const [peBase, setPeBase] = useState<number>(preset.peBase);
   const [peHigh, setPeHigh] = useState<number>(preset.peHigh);
+  const [peGrowthPct, setPeGrowthPct] = useState<number>(0);
 
   const [activeModel, setActiveModel] = useState<ModelId>(preset.primaryModel);
   const [refreshing, setRefreshing] = useState(false);
@@ -106,7 +107,13 @@ function DashboardInner({ data }: ValuationDashboardProps) {
           dividendGrowthRate: divGrowthPct / 100,
           requiredReturn: requiredReturnPct / 100,
         },
-        pe: { normalizedEps: eps, peLow, peBase, peHigh },
+        pe: {
+          normalizedEps: eps,
+          peLow,
+          peBase,
+          peHigh,
+          growthRate: peGrowthPct / 100,
+        },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -125,6 +132,7 @@ function DashboardInner({ data }: ValuationDashboardProps) {
       peLow,
       peBase,
       peHigh,
+      peGrowthPct,
     ],
   );
 
@@ -471,6 +479,15 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                       step={0.01}
                       onChange={setEps}
                       format={(v) => formatMoney(v, 2)}
+                    />
+                    <AssumptionSlider
+                      label={t("pe.growth")}
+                      value={peGrowthPct}
+                      min={0}
+                      max={30}
+                      step={0.1}
+                      onChange={setPeGrowthPct}
+                      format={(v) => formatPercentPts(v, 1)}
                     />
                     <AssumptionSlider
                       label={t("pe.low")}
