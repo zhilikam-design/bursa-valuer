@@ -8,6 +8,7 @@ interface AssumptionSliderProps {
   min: number;
   max: number;
   step: number;
+  disabled?: boolean;
   onChange: (value: number) => void;
   format: (value: number) => string;
 }
@@ -18,6 +19,7 @@ export function AssumptionSlider({
   min,
   max,
   step,
+  disabled,
   onChange,
   format,
 }: AssumptionSliderProps) {
@@ -34,6 +36,7 @@ export function AssumptionSlider({
         max={max}
         step={step}
         value={[value]}
+        disabled={disabled}
         onValueChange={(v) => onChange(v[0])}
       />
     </div>

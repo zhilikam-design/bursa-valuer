@@ -12,6 +12,7 @@ interface ModelComparisonCardProps {
   recommended: boolean;
   active: boolean;
   applicable?: boolean;
+  naReason?: string;
   fairValue: number;
   upsidePct: number;
   marginOfSafetyPct: number;
@@ -25,6 +26,7 @@ export function ModelComparisonCard({
   recommended,
   active,
   applicable = true,
+  naReason,
   fairValue,
   upsidePct,
   marginOfSafetyPct,
@@ -88,7 +90,7 @@ export function ModelComparisonCard({
         </div>
       ) : (
         <div className="mt-2 text-xs text-muted-foreground">
-          {t("pe.notApplicable")}
+          {naReason ?? t("pe.notApplicable")}
         </div>
       )}
 
