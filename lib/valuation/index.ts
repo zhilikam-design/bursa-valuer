@@ -24,9 +24,9 @@ export interface RunValuationInput {
 
 /**
  * Run all three models and produce a unified result.
- * The "primary" model is selected by sector (banks/REITs -> DDM,
- * tech/consumer -> PE band, otherwise DCF), matching the BursaValuer
- * algorithm-modularization spec.
+ * The "primary" model is selected by sector (banks/REITs/utilities -> DDM,
+ * tech/consumer -> PE band, otherwise DCF), with a fallback chain that picks
+ * the first applicable model when the preferred one has insufficient data.
  */
 export function runValuation(input: RunValuationInput): ValuationResult {
   const { price, sector, dcf, ddm, pe } = input;
@@ -35,14 +35,26 @@ export function runValuation(input: RunValuationInput): ValuationResult {
   const ddmRes: DdmResult | null = computeDdm(ddm, price);
   const peRes: PeBandResult | null = computePeBand(pe, price);
 
-  let primary: ModelId = SECTOR_PRESETS[sector]?.primaryModel ?? "dcf";
-  // PE band is meaningless for loss-making counters (EPS <= 0) — fall back to DCF.
-  if (primary === "pe" && peRes && !peRes.applicable) {
-    primary = dcfRes ? "dcf" : "ddm";
+  const preferred = SECTOR_PRESETS[sector]?.primaryModel ?? "dcf";
+  const order: ModelId[] =
+    preferred === "ddm"
+      ? ["ddm", "pe", "dcf"]
+      : preferred === "pe"
+        ? ["pe", "dcf", "ddm"]
+        : ["dcf", "pe", "ddm"];
+
+  const resultOf = (m: ModelId) =>
+    m === "dcf" ? dcfRes : m === "ddm" ? ddmRes : peRes;
+
+  let primary: ModelId = order[0];
+  for (const m of order) {
+    if (resultOf(m)?.applicable) {
+      primary = m;
+      break;
+    }
   }
 
-  const primaryResult =
-    primary === "dcf" ? dcfRes : primary === "ddm" ? ddmRes : peRes;
+  const primaryResult = resultOf(primary);
 
   const primaryFairValue =
     primary === "dcf"
@@ -52,10 +64,10 @@ export function runValuation(input: RunValuationInput): ValuationResult {
         : peRes?.fairValueBase ?? 0;
   const primaryUpsidePct = primaryResult?.upsidePct ?? 0;
 
-  // Blended: equal-weight the three model fair values (whichever are valid)
+  // Blended: equal-weight only the applicable models.
   const values: number[] = [
-    dcfRes?.fairValuePerShare,
-    ddmRes?.fairValuePerShare,
+    dcfRes?.applicable ? dcfRes.fairValuePerShare : undefined,
+    ddmRes?.applicable ? ddmRes.fairValuePerShare : undefined,
     peRes?.applicable ? peRes.fairValueBase : undefined,
   ].filter((v): v is number => typeof v === "number" && isFinite(v) && v > 0);
 

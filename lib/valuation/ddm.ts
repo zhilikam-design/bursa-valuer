@@ -6,23 +6,40 @@ import { marginOfSafetyPct, upsidePct, verdictFromUpside } from "./verdict";
  *
  *   P0 = DPS * (1 + g) / (r - g)
  *
- * Preferred model for Malaysian banks & REITs, which are mature,
- * dividend-paying businesses (Maybank, Public Bank, REITs, etc.).
+ * Preferred model for Malaysian banks, REITs and utilities, which are
+ * mature, dividend-paying businesses (Maybank, Public Bank, REITs, Tenaga…).
  * Mirrors OpenBB's ddm() convention, localized for Bursa Malaysia.
  */
 export function computeDdm(inputs: DdmInputs, price: number): DdmResult {
   const { dividendPerShare, dividendGrowthRate, requiredReturn } = inputs;
 
+  // No dividend data: DDM is not applicable (never fabricate a dividend).
+  if (!(dividendPerShare > 0)) {
+    return {
+      model: "ddm",
+      applicable: false,
+      reason: "No dividend data — DDM not applicable",
+      nextDps: 0,
+      fairValuePerShare: 0,
+      dividendYieldPct: 0,
+      upsidePct: 0,
+      marginOfSafetyPct: 0,
+      verdict: "hold",
+      breakdown: [],
+    };
+  }
+
   const safeReturn = requiredReturn > 0 ? requiredReturn : 0.09;
   const nextDps = dividendPerShare * (1 + dividendGrowthRate);
 
-  // Guard against r <= g
-  let fairValuePerShare: number;
-  if (safeReturn > dividendGrowthRate) {
-    fairValuePerShare = nextDps / (safeReturn - dividendGrowthRate);
-  } else {
-    fairValuePerShare = nextDps / Math.max(safeReturn, 0.001);
+  // Gordon model safety: enforce (r - g) >= 2.0%; clamp and warn otherwise.
+  let denominator = safeReturn - dividendGrowthRate;
+  let warning: string | undefined;
+  if (denominator < 0.02) {
+    warning = "Growth rate too close to discount rate";
+    denominator = 0.02;
   }
+  const fairValuePerShare = nextDps / denominator;
 
   const upside = upsidePct(fairValuePerShare, price);
   const mos = marginOfSafetyPct(fairValuePerShare, price);
@@ -30,6 +47,8 @@ export function computeDdm(inputs: DdmInputs, price: number): DdmResult {
 
   return {
     model: "ddm",
+    applicable: true,
+    warning,
     nextDps,
     fairValuePerShare,
     dividendYieldPct: forwardYield,

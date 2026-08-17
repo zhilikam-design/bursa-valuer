@@ -24,6 +24,26 @@ export function computeDcf(inputs: DcfInputs, price: number): DcfResult {
     projectionYears = 5,
   } = inputs;
 
+  // Insufficient data: never fabricate a value from zero FCF / zero shares.
+  if (!(freeCashFlow > 0) || !(sharesOutstanding > 0)) {
+    return {
+      model: "dcf",
+      applicable: false,
+      reason: "Insufficient Financial Data to run DCF",
+      cashFlows: [],
+      presentValues: [],
+      terminalValue: 0,
+      terminalValuePv: 0,
+      enterpriseValue: 0,
+      equityValue: 0,
+      fairValuePerShare: 0,
+      upsidePct: 0,
+      marginOfSafetyPct: 0,
+      verdict: "hold",
+      breakdown: [],
+    };
+  }
+
   const safeShares = sharesOutstanding > 0 ? sharesOutstanding : 1;
   const safeDiscount = discountRate > 0 ? discountRate : 0.092;
   const years = projectionYears > 0 ? Math.round(projectionYears) : 5;
@@ -57,6 +77,7 @@ export function computeDcf(inputs: DcfInputs, price: number): DcfResult {
 
   return {
     model: "dcf",
+    applicable: true,
     cashFlows,
     presentValues,
     terminalValue,

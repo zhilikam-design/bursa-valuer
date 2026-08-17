@@ -1,6 +1,7 @@
 export type Sector =
   | "bank"
   | "reit"
+  | "utilities"
   | "tech"
   | "consumer"
   | "industrial"
@@ -28,6 +29,8 @@ export interface DcfInputs {
 
 export interface DcfResult {
   model: "dcf";
+  applicable: boolean; // false when FCF or shares outstanding missing
+  reason?: string;
   cashFlows: number[];
   presentValues: number[];
   terminalValue: number;
@@ -52,6 +55,9 @@ export interface DdmInputs {
 
 export interface DdmResult {
   model: "ddm";
+  applicable: boolean; // false when no dividend data
+  reason?: string;
+  warning?: string; // e.g. growth rate too close to discount rate
   nextDps: number;
   fairValuePerShare: number;
   dividendYieldPct: number; // forward yield, decimal
