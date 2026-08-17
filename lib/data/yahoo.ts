@@ -1,5 +1,7 @@
 import { normalizeTicker, toBursaCode } from "@/lib/bursa";
 import { SEED_MAP, type StockData, type StockSeed, type YahooQuote } from "./seed";
+import { fetchFmpQuote } from "./fmp";
+import { agreementOf, pickMedian } from "./arbitrate";
 
 /**
  * Server-side Yahoo Finance fetch for Bursa Malaysia counters.
@@ -137,51 +139,45 @@ function seedToQuote(seed: StockSeed): YahooQuote {
 export async function getStockData(rawTicker: string): Promise<StockData> {
   const code = toBursaCode(rawTicker);
   const seed = SEED_MAP[code] ?? null;
-
-  const yahoo = await fetchYahooQuote(rawTicker);
-  const fin = await fetchYahooFinancials(rawTicker);
-  if (yahoo) {
-    const quote: YahooQuote = {
-      ...yahoo,
-      eps: fin?.eps ?? seed?.eps ?? null,
-      pe: fin?.pe ?? seed?.pe ?? null,
-      dividendYieldPct:
-        fin?.dividendYieldPct ?? seed?.dividendYieldPct ?? 0,
-    };
-    return { ticker: yahoo.ticker, code, quote, seed, source: "yahoo" };
-  }
-
-  if (seed) {
-    return {
-      ticker: seed.ticker,
-      code,
-      quote: seedToQuote(seed),
-      seed,
-      source: "seed",
-    };
-  }
-
-  // Unknown code and offline: still render with a generic profile so the
-  // user can type manual inputs.
   const ticker = normalizeTicker(rawTicker);
-  return {
+
+  const [yahoo, fin, fmp] = await Promise.all([
+    fetchYahooQuote(rawTicker),
+    fetchYahooFinancials(rawTicker),
+    fetchFmpQuote(rawTicker),
+  ]);
+
+  const dataSources = { yahoo: !!yahoo, fmp: !!fmp, seed: !!seed };
+
+  // Cross-source arbitration: median of whatever contributed, with an
+  // agreement flag for the UI to surface data-quality.
+  const eps = pickMedian([fin?.eps, fmp?.eps, seed?.eps]);
+  const epsAgreement = agreementOf([fin?.eps, fmp?.eps, seed?.eps]);
+  const pe = pickMedian([fin?.pe, fmp?.pe, seed?.pe]);
+  const dividendYieldPct =
+    pickMedian([
+      fin?.dividendYieldPct,
+      fmp?.dividendYieldPct,
+      seed?.dividendYieldPct,
+    ]) ?? 0;
+
+  const price = yahoo?.price ?? fmp?.price ?? seed?.price ?? 0;
+  const source: StockData["source"] = yahoo ? "yahoo" : fmp ? "fmp" : "seed";
+
+  const quote: YahooQuote = {
     ticker,
     code,
-    quote: {
-      ticker,
-      code,
-      name: code,
-      nameZh: code,
-      price: 0,
-      currency: "MYR",
-      previousClose: 0,
-      changePct: 0,
-      marketCap: 0,
-      eps: null,
-      pe: null,
-      dividendYieldPct: 0,
-    },
-    seed: null,
-    source: "seed",
+    name: seed?.name ?? fmp?.name ?? yahoo?.name ?? code,
+    nameZh: seed?.nameZh ?? seed?.name ?? code,
+    price,
+    currency: yahoo?.currency ?? "MYR",
+    previousClose: yahoo?.previousClose ?? price,
+    changePct: yahoo?.changePct ?? 0,
+    marketCap: fmp?.marketCap ?? yahoo?.marketCap ?? 0,
+    eps,
+    pe,
+    dividendYieldPct,
   };
+
+  return { ticker, code, quote, seed, source, dataSources, epsAgreement };
 }

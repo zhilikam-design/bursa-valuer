@@ -21,7 +21,9 @@ export interface StockData {
   code: string;
   quote: YahooQuote;
   seed: StockSeed | null;
-  source: "yahoo" | "seed";
+  source: "yahoo" | "fmp" | "seed";
+  dataSources: { yahoo: boolean; fmp: boolean; seed: boolean };
+  epsAgreement: "agree" | "mixed" | "single" | "none";
 }
 
 export interface StockSeed {
