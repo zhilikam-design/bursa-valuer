@@ -67,11 +67,13 @@ export interface PeBandInputs {
   peLow: number;
   peBase: number;
   peHigh: number;
+  growthRate?: number; // decimal — forward EPS growth (EPS * (1 + g))
 }
 
 export interface PeBandResult {
   model: "pe";
   applicable: boolean; // false when normalized EPS <= 0 (loss-making)
+  reason?: string; // why not applicable (loss-making)
   fairValueLow: number;
   fairValueBase: number;
   fairValueHigh: number;
