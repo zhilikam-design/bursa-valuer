@@ -40,11 +40,19 @@ npm start
 
 `lib/data/yahoo.ts` fetches quotes from Yahoo Finance's public chart endpoint
 (`query1.finance.yahoo.com`) with a 60-second revalidation, plus a manual
-**refresh price** button on the stock page that hits `/api/quote/[ticker]`
-for an instant no-cache refresh. When the network is unavailable, the app falls
-back to `lib/data/seed.ts` — approximate demo figures for well-known Bursa
-counters — so the valuation UI always renders. Unknown tickers render a generic
-profile where you can type manual inputs.
+**refresh price** button (⚡) on the stock page that hits `/api/quote/[ticker]`
+for an instant no-cache refresh.
+
+Optional second source: set `FMP_API_KEY` (see `.env.example`,
+<https://financialmodelingprep.com>) to also pull EPS / P/E / dividend yield
+from Financial Modeling Prep. When multiple sources contribute, `lib/data/arbitrate.ts`
+takes the **median** and flags agreement (`多源一致` / `数据不一致` / `单一来源`)
+in the stock header.
+
+When the network is unavailable, the app falls back to `lib/data/seed.ts` —
+approximate demo figures for well-known Bursa counters — so the valuation UI
+always renders. Unknown tickers render a generic profile where you can type
+manual inputs.
 
 ## Project structure
 
@@ -62,7 +70,7 @@ lib/
   i18n.tsx                 # en/zh dictionaries + LangProvider
   format.ts                # RM / percent formatting
   valuation/               # dcf.ts, ddm.ts, pe-band.ts, index.ts (orchestrator)
-  data/                    # yahoo.ts (fetch) + seed.ts (offline defaults)
+  data/                    # yahoo.ts + fmp.ts (fetch), arbitrate.ts (merge), seed.ts (offline defaults)
 ```
 
 ## Adapted from open source
