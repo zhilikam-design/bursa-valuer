@@ -1,0 +1,203 @@
+"use client";
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useState,
+  type ReactNode,
+} from "react";
+
+export type Lang = "en" | "zh";
+
+type Dict = Record<string, string>;
+
+const en: Dict = {
+  "app.name": "BursaValuer",
+  "app.tagline": "Bursa Malaysia stock valuation",
+  "app.zhName": "马股估值器",
+  "search.placeholder": "Enter Bursa stock code, e.g. 1155 or 0166",
+  "search.button": "Value",
+  "search.try": "Try:",
+  "stock.price": "Price",
+  "stock.sector": "Sector",
+  "stock.dataSource": "Data source",
+  "stock.live": "Live (Yahoo Finance)",
+  "stock.demo": "Demo defaults (offline)",
+  "stock.unknown": "Unknown ticker — using demo defaults",
+  "stock.model": "Model",
+  "sector.bank": "Bank",
+  "sector.reit": "REIT",
+  "sector.tech": "Technology",
+  "sector.consumer": "Consumer",
+  "sector.industrial": "Industrial",
+  "sector.general": "General",
+  "model.dcf": "DCF",
+  "model.dcf.full": "Discounted Cash Flow",
+  "model.ddm": "Gordon DDM",
+  "model.ddm.full": "Dividend Discount Model",
+  "model.pe": "PE Band",
+  "model.pe.full": "Normalized PE Band",
+  "model.dcf.desc": "Free-cash-flow model with Gordon terminal value",
+  "model.ddm.desc": "Dividend model for banks & REITs",
+  "model.pe.desc": "Normalized earnings band for tech & consumer",
+  "model.recommended": "Recommended for this sector",
+  "assumptions.title": "Assumptions",
+  "manual.title": "Manual inputs",
+  "dcf.fcf": "Free cash flow (RM mil)",
+  "dcf.growth": "FCF growth",
+  "dcf.terminal": "Terminal growth",
+  "dcf.discount": "Discount rate (WACC)",
+  "dcf.shares": "Shares outstanding (mil)",
+  "dcf.netDebt": "Net debt (RM mil)",
+  "ddm.dps": "Dividend per share (RM)",
+  "ddm.growth": "Dividend growth",
+  "ddm.required": "Required return",
+  "pe.eps": "Normalized EPS (RM)",
+  "pe.low": "PE (bear)",
+  "pe.base": "PE (base)",
+  "pe.high": "PE (bull)",
+  "result.fairValue": "Fair value",
+  "result.upside": "Upside",
+  "result.margin": "Margin of safety",
+  "result.comparison": "Model comparison",
+  "result.verdict": "Verdict",
+  "verdict.buy": "Undervalued · Buy",
+  "verdict.hold": "Fairly valued · Hold",
+  "verdict.sell": "Overvalued · Sell",
+  "chart.band": "Valuation band",
+  "chart.sensitivity": "Sensitivity — fair value vs discount rate",
+  "chart.currentPrice": "Current price",
+  "chart.fairValue": "Fair value",
+  "macro.title": "Malaysia market assumptions",
+  "macro.rf": "Risk-free rate (MGS 10Y)",
+  "macro.erp": "Equity risk premium",
+  "macro.tax": "Corporate tax",
+  "macro.baseline": "Baseline discount rate",
+  "disclaimer": "Educational estimate only. Not investment advice.",
+  "sector.hint": "Model auto-selected by sector",
+  "dcf.pvFcf": "PV of projected FCFs",
+  "dcf.pvTerminal": "PV of terminal value",
+  "dcf.ev": "Enterprise value",
+  "dcf.equity": "Equity value",
+  "dcf.fairPerShare": "Fair value per share",
+  "ddm.nextDps": "Next-year dividend",
+  "ddm.fairPerShare": "Fair value per share",
+  "ddm.yield": "Forward dividend yield",
+  "pe.fvLow": "Fair value (bear)",
+  "pe.fvBase": "Fair value (base)",
+  "pe.fvHigh": "Fair value (bull)",
+  "blended": "Blended estimate",
+};
+
+const zh: Dict = {
+  "app.name": "BursaValuer",
+  "app.tagline": "马来西亚股市估值",
+  "app.zhName": "马股估值器",
+  "search.placeholder": "输入马股代码，如 1155 或 0166",
+  "search.button": "估值",
+  "search.try": "试试：",
+  "stock.price": "现价",
+  "stock.sector": "板块",
+  "stock.dataSource": "数据来源",
+  "stock.live": "实时 (Yahoo Finance)",
+  "stock.demo": "演示默认值 (离线)",
+  "stock.unknown": "未知代码 — 使用演示默认值",
+  "stock.model": "模型",
+  "sector.bank": "银行",
+  "sector.reit": "产托 (REIT)",
+  "sector.tech": "科技",
+  "sector.consumer": "消费",
+  "sector.industrial": "工业",
+  "sector.general": "综合",
+  "model.dcf": "DCF",
+  "model.dcf.full": "自由现金流折现",
+  "model.ddm": "戈登 DDM",
+  "model.ddm.full": "股利折现模型",
+  "model.pe": "PE 区间",
+  "model.pe.full": "归一化市盈率区间",
+  "model.dcf.desc": "自由现金流 + 戈登终值",
+  "model.ddm.desc": "银行与产托的股息模型",
+  "model.pe.desc": "科技与消费股的归一化盈利区间",
+  "model.recommended": "该板块推荐模型",
+  "assumptions.title": "假设参数",
+  "manual.title": "手动输入",
+  "dcf.fcf": "自由现金流 (百万令吉)",
+  "dcf.growth": "FCF 增长率",
+  "dcf.terminal": "永续增长率",
+  "dcf.discount": "折现率 (WACC)",
+  "dcf.shares": "流通股数 (百万股)",
+  "dcf.netDebt": "净负债 (百万令吉)",
+  "ddm.dps": "每股股息 (令吉)",
+  "ddm.growth": "股息增长率",
+  "ddm.required": "要求回报率",
+  "pe.eps": "归一化 EPS (令吉)",
+  "pe.low": "PE (悲观)",
+  "pe.base": "PE (基准)",
+  "pe.high": "PE (乐观)",
+  "result.fairValue": "公允价值",
+  "result.upside": "上涨空间",
+  "result.margin": "安全边际",
+  "result.comparison": "模型对比",
+  "result.verdict": "结论",
+  "verdict.buy": "低估 · 买入",
+  "verdict.hold": "合理 · 持有",
+  "verdict.sell": "高估 · 卖出",
+  "chart.band": "估值区间",
+  "chart.sensitivity": "敏感性 — 公允价值 vs 折现率",
+  "chart.currentPrice": "当前股价",
+  "chart.fairValue": "公允价值",
+  "macro.title": "马来西亚市场假设",
+  "macro.rf": "无风险利率 (MGS 10Y)",
+  "macro.erp": "股权风险溢价",
+  "macro.tax": "企业所得税",
+  "macro.baseline": "基准折现率",
+  "disclaimer": "仅为教学估算，不构成投资建议。",
+  "sector.hint": "按板块自动选择模型",
+  "dcf.pvFcf": "预测现金流现值",
+  "dcf.pvTerminal": "终值现值",
+  "dcf.ev": "企业价值 (EV)",
+  "dcf.equity": "股权价值",
+  "dcf.fairPerShare": "每股公允价值",
+  "ddm.nextDps": "下一年股息",
+  "ddm.fairPerShare": "每股公允价值",
+  "ddm.yield": "前瞻股息率",
+  "pe.fvLow": "公允价值 (悲观)",
+  "pe.fvBase": "公允价值 (基准)",
+  "pe.fvHigh": "公允价值 (乐观)",
+  "blended": "综合估值",
+};
+
+const dictionaries: Record<Lang, Dict> = { en, zh };
+
+interface LangContextValue {
+  lang: Lang;
+  setLang: (l: Lang) => void;
+  t: (key: string) => string;
+}
+
+const LangContext = createContext<LangContextValue>({
+  lang: "en",
+  setLang: () => {},
+  t: (k: string) => en[k] ?? k,
+});
+
+export function LangProvider({ children }: { children: ReactNode }) {
+  const [lang, setLangState] = useState<Lang>("en");
+
+  const setLang = useCallback((l: Lang) => setLangState(l), []);
+  const t = useCallback(
+    (key: string) => dictionaries[lang][key] ?? en[key] ?? key,
+    [lang],
+  );
+
+  return (
+    <LangContext.Provider value={{ lang, setLang, t }}>
+      {children}
+    </LangContext.Provider>
+  );
+}
+
+export function useLang() {
+  return useContext(LangContext);
+}
