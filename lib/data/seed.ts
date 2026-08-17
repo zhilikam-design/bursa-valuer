@@ -16,11 +16,29 @@ export interface YahooQuote {
   dividendYieldPct: number; // percent points, e.g. 5.9 = 5.9%
 }
 
+export type FinancialDataQuality = "seed" | "estimated" | "insufficient";
+
+/** Resolved financial inputs for the valuation models (no fabricated defaults). */
+export interface Financials {
+  eps: number | null; // RM
+  pe: number | null;
+  dividendYieldPct: number | null; // percent points
+  dps: number | null; // RM
+  fcf: number | null; // RM millions
+  sharesOutstanding: number | null; // millions
+  netDebt: number | null; // RM millions (null = unknown → 0)
+  quality: FinancialDataQuality;
+  isFallback: boolean; // true when seed/estimated (amber badge)
+  insufficientDcf: boolean; // FCF or shares missing → DCF disabled
+  insufficientDdm: boolean; // no dividend → DDM disabled
+}
+
 export interface StockData {
   ticker: string;
   code: string;
   quote: YahooQuote;
   seed: StockSeed | null;
+  financials: Financials;
   source: "yahoo" | "fmp" | "seed";
   dataSources: { yahoo: boolean; fmp: boolean; seed: boolean };
   epsAgreement: "agree" | "mixed" | "single" | "none";
@@ -43,9 +61,8 @@ export interface StockSeed {
 }
 
 /**
- * Offline demo defaults for well-known Bursa Malaysia counters.
- * These are approximate placeholder figures used only when the live
- * Yahoo Finance fetch is unavailable, so the valuation UI still works.
+ * Curated reference figures for well-known Bursa Malaysia counters.
+ * Used when live financials are unavailable; flagged as fallback in the UI.
  */
 export const SEED_STOCKS: StockSeed[] = [
   {
@@ -128,7 +145,7 @@ export const SEED_STOCKS: StockSeed[] = [
     ticker: "5347.KL",
     name: "Tenaga Nasional",
     nameZh: "国家能源",
-    sector: "industrial",
+    sector: "utilities",
     price: 14.2,
     eps: 0.62,
     dps: 0.46,
@@ -152,6 +169,21 @@ export const SEED_STOCKS: StockSeed[] = [
     netDebt: -900,
     pe: 35.0,
     dividendYieldPct: 1.9,
+  },
+  {
+    code: "0275",
+    ticker: "0275.KL",
+    name: "Oppstar",
+    nameZh: "Oppstar",
+    sector: "tech",
+    price: 0.75,
+    eps: 0.025,
+    dps: 0,
+    fcf: 20.0,
+    shares: 662.6,
+    netDebt: 0,
+    pe: 30.0,
+    dividendYieldPct: 0,
   },
 ];
 

@@ -93,6 +93,17 @@ export const SECTOR_PRESETS: Record<Sector, SectorPreset> = {
     peBase: 15,
     peHigh: 18,
   },
+  utilities: {
+    primaryModel: "ddm",
+    growthPct: 3,
+    terminalGrowthPct: 2.5,
+    discountPct: 7.5,
+    divGrowthPct: 3,
+    requiredReturnPct: 7.5,
+    peLow: 10,
+    peBase: 13,
+    peHigh: 16,
+  },
   tech: {
     primaryModel: "pe",
     growthPct: 18,
@@ -142,6 +153,7 @@ export const SECTOR_PRESETS: Record<Sector, SectorPreset> = {
 export const SECTOR_ORDER: Sector[] = [
   "bank",
   "reit",
+  "utilities",
   "tech",
   "consumer",
   "industrial",

@@ -1,5 +1,12 @@
+import {
+  SEED_MAP,
+  type FinancialDataQuality,
+  type Financials,
+  type StockData,
+  type StockSeed,
+  type YahooQuote,
+} from "./seed";
 import { normalizeTicker, toBursaCode } from "@/lib/bursa";
-import { SEED_MAP, type StockData, type StockSeed, type YahooQuote } from "./seed";
 import { fetchFmpQuote } from "./fmp";
 import { agreementOf, pickMedian } from "./arbitrate";
 
@@ -72,12 +79,13 @@ export interface YahooFinancials {
   eps: number | null; // may be negative for loss-making counters
   pe: number | null; // null when EPS <= 0 or unknown
   dividendYieldPct: number | null; // percent points
+  sharesOutstanding: number | null; // millions
 }
 
 /**
- * Fetch trailing EPS / P/E / dividend yield from Yahoo's quoteSummary
- * endpoint. Returns null when the endpoint is unavailable (it is often
- * rate-limited without a crumb), in which case we fall back to seed or null.
+ * Fetch trailing EPS / P/E / dividend yield / shares outstanding from
+ * Yahoo's quoteSummary endpoint. Returns null when the endpoint is
+ * unavailable (often rate-limited without a crumb).
  */
 export async function fetchYahooFinancials(
   rawTicker: string,
@@ -105,6 +113,7 @@ export async function fetchYahooFinancials(
     const epsRaw = stats.trailingEps?.raw;
     const peRaw = detail.trailingPE?.raw;
     const divYieldRaw = detail.dividendYield?.raw; // fraction, e.g. 0.059
+    const sharesRaw = stats.sharesOutstanding?.raw; // absolute count
 
     return {
       eps: typeof epsRaw === "number" && isFinite(epsRaw) ? epsRaw : null,
@@ -112,6 +121,10 @@ export async function fetchYahooFinancials(
       dividendYieldPct:
         typeof divYieldRaw === "number" && isFinite(divYieldRaw)
           ? divYieldRaw * 100
+          : null,
+      sharesOutstanding:
+        typeof sharesRaw === "number" && isFinite(sharesRaw) && sharesRaw > 0
+          ? sharesRaw / 1e6
           : null,
     };
   } catch {
@@ -179,5 +192,48 @@ export async function getStockData(rawTicker: string): Promise<StockData> {
     dividendYieldPct,
   };
 
-  return { ticker, code, quote, seed, source, dataSources, epsAgreement };
+  // --- Resolve DCF/DDM inputs (never fabricate dummy defaults) ---
+  const sharesM = seed?.shares ?? fin?.sharesOutstanding ?? null;
+
+  let fcf: number | null = null;
+  let quality: FinancialDataQuality = "insufficient";
+  if (seed?.fcf != null && seed.fcf > 0) {
+    fcf = seed.fcf;
+    quality = "seed";
+  } else if (eps != null && eps > 0 && sharesM != null && sharesM > 0) {
+    // Estimate base FCF ≈ 80% of net profit (EPS × shares outstanding).
+    fcf = Number((eps * sharesM * 0.8).toFixed(2));
+    quality = "estimated";
+  }
+
+  let dps: number | null = seed?.dps ?? null;
+  if (dps == null && dividendYieldPct > 0 && price > 0) {
+    dps = Number(((dividendYieldPct / 100) * price).toFixed(4));
+  }
+
+  const financials: Financials = {
+    eps,
+    pe,
+    dividendYieldPct: dividendYieldPct > 0 ? dividendYieldPct : null,
+    dps,
+    fcf,
+    sharesOutstanding: sharesM,
+    netDebt: seed?.netDebt ?? 0,
+    quality,
+    isFallback: quality === "seed" || quality === "estimated",
+    insufficientDcf:
+      fcf == null || sharesM == null || fcf <= 0 || sharesM <= 0,
+    insufficientDdm: dps == null || dps <= 0,
+  };
+
+  return {
+    ticker,
+    code,
+    quote,
+    seed,
+    financials,
+    source,
+    dataSources,
+    epsAgreement,
+  };
 }
