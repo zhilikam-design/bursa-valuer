@@ -50,33 +50,36 @@ function MacroStat({ label, value }: { label: string; value: string }) {
 function DashboardInner({ data }: ValuationDashboardProps) {
   const { t, lang } = useLang();
   const quote = data.quote;
+  const fin = data.financials;
 
   const initialSector: Sector = data.seed?.sector ?? "general";
   const preset = SECTOR_PRESETS[initialSector];
   const initialPrice =
-    quote.price > 0 ? quote.price : data.seed?.price ?? 1;
+    quote.price > 0 ? quote.price : data.seed?.price ?? 0;
 
   // --- editable assumptions (display units) ---
   const [sector, setSector] = useState<Sector>(initialSector);
   const [price, setPrice] = useState<number>(initialPrice);
 
-  // DCF
-  const [fcf, setFcf] = useState<number>(data.seed?.fcf ?? 500);
+  // DCF — initialized from resolved financials, never from hardcoded dummies
+  const [fcf, setFcf] = useState<number>(fin.fcf ?? 0);
   const [growthPct, setGrowthPct] = useState<number>(preset.growthPct);
   const [terminalPct, setTerminalPct] = useState<number>(preset.terminalGrowthPct);
   const [discountPct, setDiscountPct] = useState<number>(preset.discountPct);
-  const [shares, setShares] = useState<number>(data.seed?.shares ?? 1000);
-  const [netDebt, setNetDebt] = useState<number>(data.seed?.netDebt ?? 0);
+  const [shares, setShares] = useState<number>(fin.sharesOutstanding ?? 0);
+  const [netDebt, setNetDebt] = useState<number>(fin.netDebt ?? 0);
 
   // DDM
-  const [dps, setDps] = useState<number>(data.seed?.dps ?? 0.1);
-  const [divGrowthPct, setDivGrowthPct] = useState<number>(preset.divGrowthPct);
+  const [dps, setDps] = useState<number>(fin.dps ?? 0);
+  const [divGrowthPct, setDivGrowthPct] = useState<number>(
+    Math.min(Math.max(preset.divGrowthPct, 2), 4),
+  );
   const [requiredReturnPct, setRequiredReturnPct] = useState<number>(
     preset.requiredReturnPct,
   );
 
   // PE
-  const [eps, setEps] = useState<number>(quote.eps ?? data.seed?.eps ?? 0);
+  const [eps, setEps] = useState<number>(fin.eps ?? 0);
   const [peLow, setPeLow] = useState<number>(preset.peLow);
   const [peBase, setPeBase] = useState<number>(preset.peBase);
   const [peHigh, setPeHigh] = useState<number>(preset.peHigh);
@@ -247,6 +250,9 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                     EPS: {t(`stock.${data.epsAgreement}`)}
                   </Badge>
                 )}
+                {fin.isFallback && (
+                  <Badge variant="hold">{t("stock.estimatedBadge")}</Badge>
+                )}
               </div>
             </div>
             <div className="flex flex-col items-end gap-1">
@@ -379,6 +385,11 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                   </TabsList>
 
                   <TabsContent value="dcf" className="space-y-4 pt-4">
+                    {!result.dcf?.applicable && (
+                      <div className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
+                        {t("dcf.insufficient")}
+                      </div>
+                    )}
                     <AssumptionSlider
                       label={t("dcf.fcf")}
                       value={fcf}
@@ -418,7 +429,7 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                     <AssumptionSlider
                       label={t("dcf.shares")}
                       value={shares}
-                      min={1}
+                      min={0}
                       max={30000}
                       step={10}
                       onChange={setShares}
@@ -436,12 +447,23 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                   </TabsContent>
 
                   <TabsContent value="ddm" className="space-y-4 pt-4">
+                    {!result.ddm?.applicable && (
+                      <div className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
+                        {t("ddm.insufficient")}
+                      </div>
+                    )}
+                    {result.ddm?.warning && (
+                      <div className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
+                        {t("ddm.warning")}
+                      </div>
+                    )}
                     <AssumptionSlider
                       label={t("ddm.dps")}
                       value={dps}
                       min={0}
                       max={10}
                       step={0.01}
+                      disabled={!result.ddm?.applicable}
                       onChange={setDps}
                       format={(v) => formatMoney(v, 2)}
                     />
@@ -449,8 +471,9 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                       label={t("ddm.growth")}
                       value={divGrowthPct}
                       min={0}
-                      max={15}
+                      max={6}
                       step={0.1}
+                      disabled={!result.ddm?.applicable}
                       onChange={setDivGrowthPct}
                       format={(v) => formatPercentPts(v, 1)}
                     />
@@ -460,6 +483,7 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                       min={4}
                       max={20}
                       step={0.1}
+                      disabled={!result.ddm?.applicable}
                       onChange={setRequiredReturnPct}
                       format={(v) => formatPercentPts(v, 1)}
                     />
@@ -544,6 +568,8 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                   modelFull={t("model.dcf.full")}
                   recommended={result.primary === "dcf"}
                   active={activeModel === "dcf"}
+                  applicable={result.dcf?.applicable ?? false}
+                  naReason={t("dcf.insufficient")}
                   fairValue={result.dcf?.fairValuePerShare ?? 0}
                   upsidePct={result.dcf?.upsidePct ?? 0}
                   marginOfSafetyPct={result.dcf?.marginOfSafetyPct ?? 0}
@@ -555,6 +581,8 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                   modelFull={t("model.ddm.full")}
                   recommended={result.primary === "ddm"}
                   active={activeModel === "ddm"}
+                  applicable={result.ddm?.applicable ?? false}
+                  naReason={t("ddm.insufficient")}
                   fairValue={result.ddm?.fairValuePerShare ?? 0}
                   upsidePct={result.ddm?.upsidePct ?? 0}
                   marginOfSafetyPct={result.ddm?.marginOfSafetyPct ?? 0}
@@ -567,6 +595,7 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                   recommended={result.primary === "pe"}
                   active={activeModel === "pe"}
                   applicable={result.pe?.applicable ?? false}
+                  naReason={t("pe.notApplicable")}
                   fairValue={result.pe?.fairValueBase ?? 0}
                   upsidePct={result.pe?.upsidePct ?? 0}
                   marginOfSafetyPct={result.pe?.marginOfSafetyPct ?? 0}
@@ -587,11 +616,15 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                     {t("model.recommended")}
                   </span>
                   <Badge variant={verdictVariant}>
-                    {t(`verdict.${result.verdict}`)}
+                    {result.blendedFairValue > 0
+                      ? t(`verdict.${result.verdict}`)
+                      : t("stock.na")}
                   </Badge>
                 </div>
                 <div className="text-2xl font-bold tabular-nums">
-                  {formatMoney(result.primaryFairValue)}
+                  {result.blendedFairValue > 0
+                    ? formatMoney(result.primaryFairValue)
+                    : t("stock.na")}
                 </div>
                 <div className="text-sm">
                   {t("result.upside")}:{" "}
