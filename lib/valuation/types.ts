@@ -31,6 +31,7 @@ export interface DcfResult {
   model: "dcf";
   applicable: boolean; // false when FCF or shares outstanding missing
   reason?: string;
+  warning?: string; // e.g. growth rate too close to discount rate
   cashFlows: number[];
   presentValues: number[];
   terminalValue: number;

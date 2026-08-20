@@ -45,7 +45,7 @@ export function computeDcf(inputs: DcfInputs, price: number): DcfResult {
   }
 
   const safeShares = sharesOutstanding > 0 ? sharesOutstanding : 1;
-  const safeDiscount = discountRate > 0 ? discountRate : 0.092;
+  const safeDiscount = discountRate > 0 ? discountRate : 0.085;
   const years = projectionYears > 0 ? Math.round(projectionYears) : 5;
 
   const cashFlows: number[] = [];
@@ -58,13 +58,14 @@ export function computeDcf(inputs: DcfInputs, price: number): DcfResult {
 
   const lastCf = cashFlows[cashFlows.length - 1] ?? freeCashFlow;
 
-  // Guard against r <= g (division by zero / negative terminal value)
-  let terminalValue: number;
-  if (safeDiscount > terminalGrowthRate) {
-    terminalValue = (lastCf * (1 + terminalGrowthRate)) / (safeDiscount - terminalGrowthRate);
-  } else {
-    terminalValue = lastCf / Math.max(safeDiscount, 0.001);
+  // Denominator safety floor: enforce (r - g_term) >= 2.0%.
+  let denominator = safeDiscount - terminalGrowthRate;
+  let warning: string | undefined;
+  if (denominator < 0.02) {
+    warning = "Growth rate too close to discount rate";
+    denominator = 0.02;
   }
+  const terminalValue = (lastCf * (1 + terminalGrowthRate)) / denominator;
   const terminalValuePv = terminalValue / Math.pow(1 + safeDiscount, years);
 
   const pvFcfSum = presentValues.reduce((a, b) => a + b, 0);
@@ -78,6 +79,7 @@ export function computeDcf(inputs: DcfInputs, price: number): DcfResult {
   return {
     model: "dcf",
     applicable: true,
+    warning,
     cashFlows,
     presentValues,
     terminalValue,

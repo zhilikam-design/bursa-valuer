@@ -3,12 +3,14 @@ import type { Sector } from "@/lib/valuation/types";
 export const CURRENCY = "MYR";
 export const CURRENCY_SYMBOL = "RM";
 
-// --- Bursa Malaysia market defaults (BursaValuer spec) ---
-export const MGS_10Y_YIELD = 0.038; // Malaysia 10Y Government Securities yield
-export const EQUITY_RISK_PREMIUM = 0.054; // Malaysia equity risk premium
-export const BASELINE_DISCOUNT_RATE = 0.092; // rf (3.80%) + ERP (5.40%) at beta = 1
+// --- Bursa Malaysia market defaults ---
+export const RISK_FREE_RATE = 0.035; // Malaysia 10Y MGS yield
+export const EQUITY_RISK_PREMIUM = 0.05; // market equity risk premium
+export const MIN_DISCOUNT_RATE = 0.06; // CAPM floor
+export const BASELINE_DISCOUNT_RATE = RISK_FREE_RATE + EQUITY_RISK_PREMIUM; // 8.5% at beta = 1
 export const CORPORATE_TAX_RATE = 0.24;
-export const TERMINAL_GROWTH_RATE = 0.03;
+export const DEFAULT_GROWTH_RATE = 0.02; // stable/perpetual + DDM dividend growth default
+export const TERMINAL_GROWTH_RATE = 0.02;
 export const PROJECTION_YEARS = 5;
 
 export interface MarketAssumptions {
@@ -21,7 +23,7 @@ export interface MarketAssumptions {
 }
 
 export const MARKET_ASSUMPTIONS: MarketAssumptions = {
-  riskFreeRate: MGS_10Y_YIELD,
+  riskFreeRate: RISK_FREE_RATE,
   equityRiskPremium: EQUITY_RISK_PREMIUM,
   corporateTaxRate: CORPORATE_TAX_RATE,
   baselineDiscountRate: BASELINE_DISCOUNT_RATE,
@@ -30,12 +32,39 @@ export const MARKET_ASSUMPTIONS: MarketAssumptions = {
 };
 
 /**
+ * Dynamic CAPM discount rate:
+ *   r = Rf + (beta × ERP), clamped to a minimum of 6.0%.
+ */
+export function deriveDiscountRate(beta: number): number {
+  const b = isFinite(beta) && beta > 0 ? beta : 1;
+  return Math.max(RISK_FREE_RATE + b * EQUITY_RISK_PREMIUM, MIN_DISCOUNT_RATE);
+}
+
+// --- Ticker aliases (common names resolve to Bursa .KL codes) ---
+export const TICKER_ALIASES: Record<string, string> = {
+  SUNREIT: "5176",
+  SUNWAYREIT: "5176",
+  SUNWAY: "5176",
+  OPPSTAR: "0275",
+  MAYBANK: "1155",
+  PBBANK: "1295",
+  PUBLICBANK: "1295",
+  TENAGA: "5347",
+  INARI: "0166",
+  CIMB: "1023",
+  NESTLE: "4707",
+  TOPGLOVE: "7113",
+  TOPGLOV: "7113",
+};
+
+/**
  * Normalize any Bursa ticker input into Yahoo-style "NNNN.KL".
- * Accepts "1155", "0166", "1155.KL", "klse:1155", " 0166 " etc.
+ * Accepts "1155", "0166", "1155.KL", "klse:1155", "MAYBANK", "SUNREIT", etc.
  */
 export function normalizeTicker(input: string): string {
   const cleaned = input.trim().toUpperCase().replace(/\s+/g, "");
   if (!cleaned) return "";
+  if (TICKER_ALIASES[cleaned]) return `${TICKER_ALIASES[cleaned]}.KL`;
   const code = cleaned
     .replace(/^KLSE:/, "")
     .replace(/\.KL$/, "")
@@ -43,7 +72,7 @@ export function normalizeTicker(input: string): string {
   return `${code}.KL`;
 }
 
-/** Return the bare 4-digit Bursa code ("1155.KL" -> "1155"). */
+/** Return the bare 4-digit Bursa code ("1155.KL" -> "1155", "SUNREIT" -> "5176"). */
 export function toBursaCode(input: string): string {
   return normalizeTicker(input).replace(/\.KL$/, "");
 }
@@ -56,9 +85,9 @@ export type ModelId = "dcf" | "ddm" | "pe";
 
 export interface SectorPreset {
   primaryModel: ModelId;
-  growthPct: number; // FCF growth, percent points
+  growthPct: number; // FCF projection growth, percent points
   terminalGrowthPct: number;
-  discountPct: number; // WACC / required return, percent points
+  discountPct: number; // fallback WACC, percent points (overridden by CAPM)
   divGrowthPct: number;
   requiredReturnPct: number;
   peLow: number;
@@ -67,88 +96,92 @@ export interface SectorPreset {
 }
 
 /**
- * Sector presets — which valuation model is primary, plus sensible
- * starting assumptions for Bursa Malaysia names.
+ * Sector presets. Routing rule:
+ *   Financial Services / Utilities / Real Estate -> primary Gordon DDM.
+ *   Everything else (Technology, Consumer, Industrial, General) -> primary DCF.
  */
 export const SECTOR_PRESETS: Record<Sector, SectorPreset> = {
   bank: {
     primaryModel: "ddm",
-    growthPct: 4,
-    terminalGrowthPct: 3,
-    discountPct: 9.2,
-    divGrowthPct: 4,
-    requiredReturnPct: 9,
+    growthPct: 2,
+    terminalGrowthPct: 2,
+    discountPct: 8.5,
+    divGrowthPct: 2,
+    requiredReturnPct: 8.5,
     peLow: 10,
     peBase: 13,
     peHigh: 16,
   },
   reit: {
     primaryModel: "ddm",
-    growthPct: 3,
-    terminalGrowthPct: 2.5,
-    discountPct: 7.5,
-    divGrowthPct: 3,
-    requiredReturnPct: 7.5,
+    growthPct: 2,
+    terminalGrowthPct: 2,
+    discountPct: 6.75,
+    divGrowthPct: 2,
+    requiredReturnPct: 6.75,
     peLow: 12,
     peBase: 15,
     peHigh: 18,
   },
   utilities: {
     primaryModel: "ddm",
-    growthPct: 3,
-    terminalGrowthPct: 2.5,
-    discountPct: 7.5,
-    divGrowthPct: 3,
-    requiredReturnPct: 7.5,
+    growthPct: 2,
+    terminalGrowthPct: 2,
+    discountPct: 6.75,
+    divGrowthPct: 2,
+    requiredReturnPct: 6.75,
     peLow: 10,
     peBase: 13,
     peHigh: 16,
   },
   tech: {
-    primaryModel: "pe",
-    growthPct: 18,
-    terminalGrowthPct: 4,
-    discountPct: 11,
-    divGrowthPct: 6,
-    requiredReturnPct: 11,
+    primaryModel: "dcf",
+    growthPct: 2,
+    terminalGrowthPct: 2,
+    discountPct: 9.75,
+    divGrowthPct: 2,
+    requiredReturnPct: 9.75,
     peLow: 18,
     peBase: 26,
     peHigh: 35,
   },
   consumer: {
-    primaryModel: "pe",
-    growthPct: 10,
-    terminalGrowthPct: 3.5,
-    discountPct: 9.2,
-    divGrowthPct: 5,
-    requiredReturnPct: 9,
+    primaryModel: "dcf",
+    growthPct: 2,
+    terminalGrowthPct: 2,
+    discountPct: 8.5,
+    divGrowthPct: 2,
+    requiredReturnPct: 8.5,
     peLow: 22,
     peBase: 28,
     peHigh: 34,
   },
   industrial: {
     primaryModel: "dcf",
-    growthPct: 6,
-    terminalGrowthPct: 3,
-    discountPct: 9.2,
-    divGrowthPct: 4,
-    requiredReturnPct: 9.5,
+    growthPct: 2,
+    terminalGrowthPct: 2,
+    discountPct: 8.5,
+    divGrowthPct: 2,
+    requiredReturnPct: 8.5,
     peLow: 11,
     peBase: 14,
     peHigh: 17,
   },
   general: {
     primaryModel: "dcf",
-    growthPct: 6,
-    terminalGrowthPct: 3,
-    discountPct: 9.2,
-    divGrowthPct: 4,
-    requiredReturnPct: 9.5,
+    growthPct: 2,
+    terminalGrowthPct: 2,
+    discountPct: 8.5,
+    divGrowthPct: 2,
+    requiredReturnPct: 8.5,
     peLow: 10,
     peBase: 14,
     peHigh: 18,
   },
 };
+
+/** Sectors where Gordon DDM is the primary model. */
+export const DDM_SECTORS: Sector[] = ["bank", "reit", "utilities"];
 
 export const SECTOR_ORDER: Sector[] = [
   "bank",
@@ -159,3 +192,26 @@ export const SECTOR_ORDER: Sector[] = [
   "industrial",
   "general",
 ];
+
+/** Display labels for raw sector strings (used for quote.sector). */
+export const SECTOR_LABEL: Record<Sector, string> = {
+  bank: "Financial Services",
+  reit: "Real Estate",
+  utilities: "Utilities",
+  tech: "Technology",
+  consumer: "Consumer",
+  industrial: "Industrial",
+  general: "General",
+};
+
+/** Map a raw Yahoo / seed sector string to our internal Sector enum. */
+export function normalizeSector(raw: string | null | undefined): Sector {
+  const s = (raw ?? "").toUpperCase();
+  if (/(REAL\s*ESTATE|REIT|PROPERTY)/.test(s)) return "reit";
+  if (/(FINANCIAL|BANK)/.test(s)) return "bank";
+  if (/(UTILIT|ENERGY|POWER)/.test(s)) return "utilities";
+  if (/(TECH|SEMICONDUCTOR|SOFTWARE|ELECTRONIC)/.test(s)) return "tech";
+  if (/(CONSUMER|FOOD|BEVERAGE|RETAIL)/.test(s)) return "consumer";
+  if (/(INDUSTRIAL|MANUFACTUR|GLOVE|HEALTH)/.test(s)) return "industrial";
+  return "general";
+}
