@@ -10,6 +10,7 @@ import {
   SECTOR_PRESETS,
   TERMINAL_GROWTH_RATE,
   deriveDiscountRate,
+  normalizeSector,
 } from "@/lib/bursa";
 import { dcfSensitivity, runValuation } from "@/lib/valuation";
 import type { ModelId, Sector } from "@/lib/valuation/types";
@@ -57,7 +58,8 @@ function DashboardInner({ data }: ValuationDashboardProps) {
   const beta = data.seed?.beta ?? data.quote.beta ?? 1;
   const capmRatePct = deriveDiscountRate(beta) * 100;
 
-  const initialSector: Sector = data.seed?.sector ?? "general";
+  const initialSector: Sector =
+    data.seed?.sector ?? normalizeSector(data.quote.sector);
   const preset = SECTOR_PRESETS[initialSector];
   const initialPrice =
     quote.price > 0 ? quote.price : data.seed?.price ?? 0;
@@ -236,6 +238,7 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                 <span>
                   {t("stock.dataSource")}:{" "}
                   {[
+                    data.dataSources.synced ? t("stock.tradingview") : null,
                     data.dataSources.yahoo ? t("stock.yahoo") : null,
                     data.dataSources.fmp ? t("stock.fmp") : null,
                     data.dataSources.seed ? t("stock.demo") : null,
