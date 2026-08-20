@@ -1,0 +1,24 @@
+{
+  "generatedAt": "2026-08-20T00:00:00.000Z",
+  "count": 18,
+  "stocks": {
+    "1155": { "code": "1155", "ticker": "1155.KL", "name": "Malayan Banking", "nameZh": "马来亚银行 (Maybank)", "sector": "bank", "price": 10.58, "dps": 0.6, "eps": 0.88, "fcf": 8483.2, "fcfEstimated": true, "shares": 12050, "beta": 0.85, "pe": 11.5, "dividendYieldPct": 5.9 },
+    "MAYBANK": { "code": "1155", "ticker": "1155.KL", "name": "Malayan Banking", "nameZh": "马来亚银行 (Maybank)", "sector": "bank", "price": 10.58, "dps": 0.6, "eps": 0.88, "fcf": 8483.2, "fcfEstimated": true, "shares": 12050, "beta": 0.85, "pe": 11.5, "dividendYieldPct": 5.9 },
+    "1295": { "code": "1295", "ticker": "1295.KL", "name": "Public Bank", "nameZh": "大众银行", "sector": "bank", "price": 5.12, "dps": 0.19, "eps": 0.34, "fcf": 5279.52, "fcfEstimated": true, "shares": 19410, "beta": 0.8, "pe": 13.1, "dividendYieldPct": 4.3 },
+    "PBBANK": { "code": "1295", "ticker": "1295.KL", "name": "Public Bank", "nameZh": "大众银行", "sector": "bank", "price": 5.12, "dps": 0.19, "eps": 0.34, "fcf": 5279.52, "fcfEstimated": true, "shares": 19410, "beta": 0.8, "pe": 13.1, "dividendYieldPct": 4.3 },
+    "1023": { "code": "1023", "ticker": "1023.KL", "name": "CIMB Group", "nameZh": "联昌国际", "sector": "bank", "price": 7.98, "dps": 0.42, "eps": 0.68, "fcf": 5766.4, "fcfEstimated": true, "shares": 10600, "beta": 0.9, "pe": 12.1, "dividendYieldPct": 5.1 },
+    "CIMB": { "code": "1023", "ticker": "1023.KL", "name": "CIMB Group", "nameZh": "联昌国际", "sector": "bank", "price": 7.98, "dps": 0.42, "eps": 0.68, "fcf": 5766.4, "fcfEstimated": true, "shares": 10600, "beta": 0.9, "pe": 12.1, "dividendYieldPct": 5.1 },
+    "0166": { "code": "0166", "ticker": "0166.KL", "name": "Inari Amertron", "nameZh": "益纳利美昌", "sector": "tech", "price": 2.22, "dps": 0.08, "eps": 0.12, "fcf": 350, "fcfEstimated": false, "shares": 3750, "beta": 1.3, "pe": 25.4, "dividendYieldPct": 2.6 },
+    "INARI": { "code": "0166", "ticker": "0166.KL", "name": "Inari Amertron", "nameZh": "益纳利美昌", "sector": "tech", "price": 2.22, "dps": 0.08, "eps": 0.12, "fcf": 350, "fcfEstimated": false, "shares": 3750, "beta": 1.3, "pe": 25.4, "dividendYieldPct": 2.6 },
+    "4707": { "code": "4707", "ticker": "4707.KL", "name": "Nestlé Malaysia", "nameZh": "雀巢马来西亚", "sector": "consumer", "price": 104.8, "dps": 2.8, "eps": 2.9, "fcf": 900, "fcfEstimated": false, "shares": 234.5, "beta": 0.5, "pe": 33.1, "dividendYieldPct": 2.9 },
+    "NESTLE": { "code": "4707", "ticker": "4707.KL", "name": "Nestlé Malaysia", "nameZh": "雀巢马来西亚", "sector": "consumer", "price": 104.8, "dps": 2.8, "eps": 2.9, "fcf": 900, "fcfEstimated": false, "shares": 234.5, "beta": 0.5, "pe": 33.1, "dividendYieldPct": 2.9 },
+    "5347": { "code": "5347", "ticker": "5347.KL", "name": "Tenaga Nasional", "nameZh": "国家能源", "sector": "utilities", "price": 14.5, "dps": 0.46, "eps": 0.62, "fcf": 7200, "fcfEstimated": false, "shares": 5770, "beta": 0.7, "pe": 22.9, "dividendYieldPct": 3.2 },
+    "TENAGA": { "code": "5347", "ticker": "5347.KL", "name": "Tenaga Nasional", "nameZh": "国家能源", "sector": "utilities", "price": 14.5, "dps": 0.46, "eps": 0.62, "fcf": 7200, "fcfEstimated": false, "shares": 5770, "beta": 0.7, "pe": 22.9, "dividendYieldPct": 3.2 },
+    "7113": { "code": "7113", "ticker": "7113.KL", "name": "Top Glove", "nameZh": "顶级手套", "sector": "industrial", "price": 0.665, "dps": 0.02, "eps": 0.03, "fcf": 210, "fcfEstimated": false, "shares": 8000, "beta": 1.4, "pe": 35, "dividendYieldPct": 1.9 },
+    "TOPGLOV": { "code": "7113", "ticker": "7113.KL", "name": "Top Glove", "nameZh": "顶级手套", "sector": "industrial", "price": 0.665, "dps": 0.02, "eps": 0.03, "fcf": 210, "fcfEstimated": false, "shares": 8000, "beta": 1.4, "pe": 35, "dividendYieldPct": 1.9 },
+    "0275": { "code": "0275", "ticker": "0275.KL", "name": "Oppstar", "nameZh": "Oppstar", "sector": "tech", "price": 0.665, "dps": 0, "eps": 0.025, "fcf": 18.5, "fcfEstimated": false, "shares": 662.6, "beta": 1.25, "pe": 30, "dividendYieldPct": 0 },
+    "OPPSTAR": { "code": "0275", "ticker": "0275.KL", "name": "Oppstar", "nameZh": "Oppstar", "sector": "tech", "price": 0.665, "dps": 0, "eps": 0.025, "fcf": 18.5, "fcfEstimated": false, "shares": 662.6, "beta": 1.25, "pe": 30, "dividendYieldPct": 0 },
+    "5176": { "code": "5176", "ticker": "5176.KL", "name": "Sunway REIT", "nameZh": "双威产托 (Sunway REIT)", "sector": "reit", "price": 2.2, "dps": 0.1, "eps": 0.105, "fcf": 280, "fcfEstimated": false, "shares": 3425, "beta": 0.65, "pe": 15.7, "dividendYieldPct": 6.1 },
+    "SUNREIT": { "code": "5176", "ticker": "5176.KL", "name": "Sunway REIT", "nameZh": "双威产托 (Sunway REIT)", "sector": "reit", "price": 2.2, "dps": 0.1, "eps": 0.105, "fcf": 280, "fcfEstimated": false, "shares": 3425, "beta": 0.65, "pe": 15.7, "dividendYieldPct": 6.1 }
+  }
+}
