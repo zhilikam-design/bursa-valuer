@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "verify": "tsx scripts/verify-valuation.ts"
   },
   "dependencies": {
     "@babel/runtime": "^7.24.0",
@@ -19,7 +20,8 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "recharts": "^2.13.3",
-    "tailwind-merge": "^2.5.4"
+    "tailwind-merge": "^2.5.4",
+    "yahoo-finance2": "^2.12.1"
   },
   "devDependencies": {
     "@types/node": "^20.17.6",
@@ -28,6 +30,7 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   }
 }
