@@ -4,9 +4,12 @@ import { useMemo, useState } from "react";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { LangProvider, useLang } from "@/lib/i18n";
 import {
+  DEFAULT_GROWTH_RATE,
   MARKET_ASSUMPTIONS,
   SECTOR_ORDER,
   SECTOR_PRESETS,
+  TERMINAL_GROWTH_RATE,
+  deriveDiscountRate,
 } from "@/lib/bursa";
 import { dcfSensitivity, runValuation } from "@/lib/valuation";
 import type { ModelId, Sector } from "@/lib/valuation/types";
@@ -51,6 +54,8 @@ function DashboardInner({ data }: ValuationDashboardProps) {
   const { t, lang } = useLang();
   const quote = data.quote;
   const fin = data.financials;
+  const beta = data.seed?.beta ?? data.quote.beta ?? 1;
+  const capmRatePct = deriveDiscountRate(beta) * 100;
 
   const initialSector: Sector = data.seed?.sector ?? "general";
   const preset = SECTOR_PRESETS[initialSector];
@@ -63,20 +68,21 @@ function DashboardInner({ data }: ValuationDashboardProps) {
 
   // DCF — initialized from resolved financials, never from hardcoded dummies
   const [fcf, setFcf] = useState<number>(fin.fcf ?? 0);
-  const [growthPct, setGrowthPct] = useState<number>(preset.growthPct);
-  const [terminalPct, setTerminalPct] = useState<number>(preset.terminalGrowthPct);
-  const [discountPct, setDiscountPct] = useState<number>(preset.discountPct);
+  const [growthPct, setGrowthPct] = useState<number>(DEFAULT_GROWTH_RATE * 100);
+  const [terminalPct, setTerminalPct] = useState<number>(
+    TERMINAL_GROWTH_RATE * 100,
+  );
+  const [discountPct, setDiscountPct] = useState<number>(capmRatePct);
   const [shares, setShares] = useState<number>(fin.sharesOutstanding ?? 0);
   const [netDebt, setNetDebt] = useState<number>(fin.netDebt ?? 0);
 
   // DDM
   const [dps, setDps] = useState<number>(fin.dps ?? 0);
   const [divGrowthPct, setDivGrowthPct] = useState<number>(
-    Math.min(Math.max(preset.divGrowthPct, 2), 4),
+    DEFAULT_GROWTH_RATE * 100,
   );
-  const [requiredReturnPct, setRequiredReturnPct] = useState<number>(
-    preset.requiredReturnPct,
-  );
+  const [requiredReturnPct, setRequiredReturnPct] =
+    useState<number>(capmRatePct);
 
   // PE
   const [eps, setEps] = useState<number>(fin.eps ?? 0);
@@ -160,11 +166,11 @@ function DashboardInner({ data }: ValuationDashboardProps) {
   function onSectorChange(s: Sector) {
     setSector(s);
     const p = SECTOR_PRESETS[s];
-    setGrowthPct(p.growthPct);
-    setTerminalPct(p.terminalGrowthPct);
-    setDiscountPct(p.discountPct);
-    setDivGrowthPct(p.divGrowthPct);
-    setRequiredReturnPct(p.requiredReturnPct);
+    setGrowthPct(DEFAULT_GROWTH_RATE * 100);
+    setTerminalPct(TERMINAL_GROWTH_RATE * 100);
+    setDiscountPct(capmRatePct);
+    setDivGrowthPct(DEFAULT_GROWTH_RATE * 100);
+    setRequiredReturnPct(capmRatePct);
     setPeLow(p.peLow);
     setPeBase(p.peBase);
     setPeHigh(p.peHigh);
@@ -388,6 +394,11 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                     {!result.dcf?.applicable && (
                       <div className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
                         {t("dcf.insufficient")}
+                      </div>
+                    )}
+                    {result.dcf?.warning && (
+                      <div className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
+                        {t("dcf.warning")}
                       </div>
                     )}
                     <AssumptionSlider
