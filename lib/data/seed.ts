@@ -10,13 +10,18 @@ export interface YahooQuote {
   currency: string;
   previousClose: number;
   changePct: number; // percent points, e.g. 1.25 = +1.25%
-  marketCap: number; // RM
+  marketCap: number; // RM (absolute)
   eps: number | null; // RM (null = unknown; negative = loss-making)
   pe: number | null; // null when EPS <= 0 or unknown
   dividendYieldPct: number; // percent points, e.g. 5.9 = 5.9%
+  sector: string | null; // raw sector label (e.g. "Real Estate")
+  beta: number;
+  dps: number | null; // RM
+  fcf: number | null; // RM millions
+  shares: number | null; // millions
 }
 
-export type FinancialDataQuality = "seed" | "estimated" | "insufficient";
+export type FinancialDataQuality = "live" | "seed" | "estimated" | "insufficient";
 
 /** Resolved financial inputs for the valuation models (no fabricated defaults). */
 export interface Financials {
@@ -53,11 +58,12 @@ export interface StockSeed {
   price: number; // RM
   eps: number; // trailing EPS, RM
   dps: number; // trailing DPS, RM
-  fcf: number; // trailing FCF, RM millions
+  fcf: number; // trailing FCF, RM millions (0 = "no FCF available")
   shares: number; // shares outstanding, millions
   netDebt: number; // RM millions (debt - cash)
   pe: number;
   dividendYieldPct: number; // percent points
+  beta: number;
 }
 
 /**
@@ -72,13 +78,14 @@ export const SEED_STOCKS: StockSeed[] = [
     nameZh: "马来亚银行 (Maybank)",
     sector: "bank",
     price: 10.1,
-    eps: 0.75,
+    eps: 0.88,
     dps: 0.6,
-    fcf: 6200,
-    shares: 12090,
+    fcf: 0,
+    shares: 12050,
     netDebt: 18000,
-    pe: 13.5,
+    pe: 11.5,
     dividendYieldPct: 5.9,
+    beta: 0.85,
   },
   {
     code: "1295",
@@ -89,11 +96,12 @@ export const SEED_STOCKS: StockSeed[] = [
     price: 4.45,
     eps: 0.34,
     dps: 0.19,
-    fcf: 4800,
+    fcf: 0,
     shares: 19410,
     netDebt: 12000,
     pe: 13.1,
     dividendYieldPct: 4.3,
+    beta: 0.8,
   },
   {
     code: "1023",
@@ -104,11 +112,12 @@ export const SEED_STOCKS: StockSeed[] = [
     price: 8.2,
     eps: 0.68,
     dps: 0.42,
-    fcf: 5200,
+    fcf: 0,
     shares: 10600,
     netDebt: 15000,
     pe: 12.1,
     dividendYieldPct: 5.1,
+    beta: 0.9,
   },
   {
     code: "0166",
@@ -124,6 +133,7 @@ export const SEED_STOCKS: StockSeed[] = [
     netDebt: -800,
     pe: 25.4,
     dividendYieldPct: 2.6,
+    beta: 1.3,
   },
   {
     code: "4707",
@@ -139,6 +149,7 @@ export const SEED_STOCKS: StockSeed[] = [
     netDebt: 1600,
     pe: 33.1,
     dividendYieldPct: 2.9,
+    beta: 0.5,
   },
   {
     code: "5347",
@@ -154,6 +165,7 @@ export const SEED_STOCKS: StockSeed[] = [
     netDebt: 46000,
     pe: 22.9,
     dividendYieldPct: 3.2,
+    beta: 0.7,
   },
   {
     code: "7113",
@@ -169,6 +181,7 @@ export const SEED_STOCKS: StockSeed[] = [
     netDebt: -900,
     pe: 35.0,
     dividendYieldPct: 1.9,
+    beta: 1.4,
   },
   {
     code: "0275",
@@ -179,11 +192,28 @@ export const SEED_STOCKS: StockSeed[] = [
     price: 0.75,
     eps: 0.025,
     dps: 0,
-    fcf: 20.0,
+    fcf: 18.5,
     shares: 662.6,
     netDebt: 0,
     pe: 30.0,
     dividendYieldPct: 0,
+    beta: 1.25,
+  },
+  {
+    code: "5176",
+    ticker: "5176.KL",
+    name: "Sunway REIT",
+    nameZh: "双威产托 (Sunway REIT)",
+    sector: "reit",
+    price: 1.65,
+    eps: 0.105,
+    dps: 0.1,
+    fcf: 280,
+    shares: 3425,
+    netDebt: 0,
+    pe: 15.7,
+    dividendYieldPct: 6.1,
+    beta: 0.65,
   },
 ];
 
