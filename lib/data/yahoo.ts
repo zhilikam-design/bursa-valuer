@@ -9,6 +9,29 @@ import {
 } from "./seed";
 import { fetchFmpQuote } from "./fmp";
 import { agreementOf, pickMedian } from "./arbitrate";
+import syncedJson from "./bursa-stocks.json";
+import type { Sector } from "@/lib/valuation/types";
+
+interface SyncedStockJson {
+  code: string;
+  ticker: string;
+  name: string;
+  nameZh: string;
+  sector: string;
+  price: number;
+  dps: number;
+  eps: number | null;
+  fcf: number | null; // RM millions
+  fcfEstimated: boolean;
+  shares: number | null; // millions
+  beta: number;
+  pe: number | null;
+  dividendYieldPct: number;
+}
+
+/** Pre-synced fundamentals from scripts/sync-bursa.ts (instant, no network). */
+const SYNCED_STOCKS: Record<string, SyncedStockJson> =
+  (syncedJson as { stocks?: Record<string, SyncedStockJson> }).stocks ?? {};
 
 /**
  * Server-side market-data fetch for Bursa Malaysia counters.
@@ -55,15 +78,17 @@ async function fetchViaYahooFinance2(
   const ticker = normalizeTicker(rawTicker);
   try {
     const mod = (await import("yahoo-finance2")) as {
-      default?: unknown;
+      default?: new (options?: unknown) => unknown;
     };
-    const yahooFinance = mod.default ?? mod;
-    const qs = await (yahooFinance as {
+    const Ctor = mod.default;
+    if (typeof Ctor !== "function") return null;
+    const yahooFinance = new Ctor() as {
       quoteSummary: (
         symbol: string,
-        opts: { modules: string[] },
+        opts: { modules?: string[] },
       ) => Promise<Record<string, unknown>>;
-    }).quoteSummary(ticker, {
+    };
+    const qs = await yahooFinance.quoteSummary(ticker, {
       modules: [
         "price",
         "summaryDetail",
@@ -276,6 +301,82 @@ export async function getStockData(rawTicker: string): Promise<StockData> {
   const code = toBursaCode(rawTicker);
   const seed = SEED_MAP[code] ?? null;
   const ticker = normalizeTicker(rawTicker);
+  let synced = SYNCED_STOCKS[code] ?? null;
+  let cachedYahoo: YahooQuote | null = null;
+
+  // Resolve a numeric Bursa code to its TradingView ticker via Yahoo's
+  // shortName (both share the exchange ticker, e.g. 5218 -> "VANTNRG"),
+  // so the pre-synced dataset covers arbitrary 4-digit codes, not just
+  // the seeded ones.
+  if (!synced) {
+    cachedYahoo = await fetchYahooQuote(rawTicker);
+    if (cachedYahoo) {
+      const tickerKey = (cachedYahoo.name ?? "").toUpperCase();
+      synced = SYNCED_STOCKS[tickerKey] ?? null;
+    }
+  }
+
+  // Fast path: fundamentals come from the pre-synced JSON (zero latency);
+  // only the lightweight live price is fetched on demand.
+  if (synced) {
+    const yahoo = cachedYahoo ?? (await fetchYahooQuote(rawTicker));
+    const price = yahoo?.price ?? synced.price;
+
+    const quote: YahooQuote = {
+      ticker,
+      code,
+      name: synced.name,
+      nameZh: synced.nameZh || synced.name,
+      price,
+      currency: yahoo?.currency ?? "MYR",
+      previousClose: yahoo?.previousClose ?? price,
+      changePct: yahoo?.changePct ?? 0,
+      marketCap: yahoo?.marketCap ?? 0,
+      eps: synced.eps,
+      pe: synced.pe,
+      dividendYieldPct: synced.dividendYieldPct,
+      sector: SECTOR_LABEL[synced.sector as Sector] ?? synced.sector,
+      beta: synced.beta,
+      dps: synced.dps,
+      fcf: synced.fcf,
+      shares: synced.shares,
+    };
+
+    const financials: Financials = {
+      eps: synced.eps,
+      pe: synced.pe,
+      dividendYieldPct:
+        synced.dividendYieldPct > 0 ? synced.dividendYieldPct : null,
+      dps: synced.dps,
+      fcf: synced.fcf,
+      sharesOutstanding: synced.shares,
+      netDebt: seed?.netDebt ?? 0,
+      quality: synced.fcfEstimated ? "estimated" : "live",
+      isFallback: synced.fcfEstimated,
+      insufficientDcf:
+        synced.fcf == null ||
+        synced.shares == null ||
+        synced.fcf <= 0 ||
+        synced.shares <= 0,
+      insufficientDdm: synced.dps == null || synced.dps <= 0,
+    };
+
+    return {
+      ticker,
+      code,
+      quote,
+      seed,
+      financials,
+      source: yahoo ? "yahoo" : "seed",
+      dataSources: {
+        yahoo: !!yahoo,
+        fmp: false,
+        seed: false,
+        synced: true,
+      },
+      epsAgreement: synced.eps != null ? "single" : "none",
+    };
+  }
 
   const [vf2, yahoo, fin, fmp] = await Promise.all([
     fetchViaYahooFinance2(rawTicker),
@@ -288,6 +389,7 @@ export async function getStockData(rawTicker: string): Promise<StockData> {
     yahoo: !!(yahoo || vf2),
     fmp: !!fmp,
     seed: !!seed,
+    synced: false,
   };
 
   // Cross-source arbitration: median of whatever contributed.
