@@ -45,7 +45,12 @@ export interface StockData {
   seed: StockSeed | null;
   financials: Financials;
   source: "yahoo" | "fmp" | "seed";
-  dataSources: { yahoo: boolean; fmp: boolean; seed: boolean };
+  dataSources: {
+    yahoo: boolean;
+    fmp: boolean;
+    seed: boolean;
+    synced: boolean; // fundamentals came from the pre-synced TradingView dataset
+  };
   epsAgreement: "agree" | "mixed" | "single" | "none";
 }
 
