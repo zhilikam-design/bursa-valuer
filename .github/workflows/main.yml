@@ -1,0 +1,25 @@
+name: Scheduled Bursa Fundamentals Sync
+on:
+  schedule:
+    - cron: '0 16 * * 0'   # 每周日 16:00 UTC = 周一 00:00 MYT
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - name: Run Batch Sync
+        run: npx tsx scripts/sync-bursa.ts
+      - name: Commit and Push if Changed
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add lib/data/bursa-stocks.json
+          git commit -m "chore(data): auto-sync bursa fundamentals [skip ci]" || exit 0
+          git push
