@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { LangProvider, useLang } from "@/lib/i18n";
 import {
-  DEFAULT_GROWTH_RATE,
   MARKET_ASSUMPTIONS,
   SECTOR_ORDER,
   SECTOR_PRESETS,
@@ -12,7 +11,11 @@ import {
   deriveDiscountRate,
   normalizeSector,
 } from "@/lib/bursa";
-import { dcfSensitivity, runValuation } from "@/lib/valuation";
+import {
+  dcfSensitivity,
+  deriveSustainableGrowth,
+  runValuation,
+} from "@/lib/valuation";
 import type { ModelId, Sector } from "@/lib/valuation/types";
 import type { StockData } from "@/lib/data/seed";
 import {
@@ -36,6 +39,7 @@ import { LangToggle } from "@/components/LangToggle";
 import { AssumptionSlider } from "@/components/valuation/AssumptionSlider";
 import { ModelComparisonCard } from "@/components/valuation/ModelComparisonCard";
 import { ValuationCharts } from "@/components/valuation/ValuationCharts";
+import { BetaChart } from "@/components/valuation/BetaChart";
 
 interface ValuationDashboardProps {
   ticker: string;
@@ -55,7 +59,8 @@ function DashboardInner({ data }: ValuationDashboardProps) {
   const { t, lang } = useLang();
   const quote = data.quote;
   const fin = data.financials;
-  const beta = data.seed?.beta ?? data.quote.beta ?? 1;
+  const betaAudit = data.betaAudit;
+  const beta = betaAudit?.beta ?? data.seed?.beta ?? data.quote.beta ?? 1;
   const capmRatePct = deriveDiscountRate(beta) * 100;
 
   const initialSector: Sector =
@@ -64,13 +69,38 @@ function DashboardInner({ data }: ValuationDashboardProps) {
   const initialPrice =
     quote.price > 0 ? quote.price : data.seed?.price ?? 0;
 
+  // Dynamic (endogenous) growth defaults — ROE × retention, falling back to
+  // the sector preset when ROE/payout are missing. Sliders stay overridable.
+  const initialRoe = fin.roe ?? null;
+  const initialPayout = fin.payoutRatio ?? null;
+  const dcfGrowth = deriveSustainableGrowth(
+    initialSector,
+    initialRoe,
+    initialPayout,
+  );
+  const dcfGrowthDefault = dcfGrowth.growthRate * 100;
+  const dcfGrowthIsRoe = dcfGrowth.source === "sustainable_roe";
+  const deriveDdmGrowthPct = (s: Sector) => {
+    if (s === "bank" && initialRoe != null && initialRoe > 0) {
+      const payout =
+        initialPayout != null && initialPayout > 0 && initialPayout < 1
+          ? initialPayout
+          : 0.6;
+      return Math.max(1, Math.min(initialRoe * (1 - payout) * 100, 6));
+    }
+    return SECTOR_PRESETS[s].divGrowthPct;
+  };
+  const ddmGrowthDefault = deriveDdmGrowthPct(initialSector);
+  const ddmGrowthIsRoe =
+    initialSector === "bank" && initialRoe != null && initialRoe > 0;
+
   // --- editable assumptions (display units) ---
   const [sector, setSector] = useState<Sector>(initialSector);
   const [price, setPrice] = useState<number>(initialPrice);
 
   // DCF — initialized from resolved financials, never from hardcoded dummies
   const [fcf, setFcf] = useState<number>(fin.fcf ?? 0);
-  const [growthPct, setGrowthPct] = useState<number>(DEFAULT_GROWTH_RATE * 100);
+  const [growthPct, setGrowthPct] = useState<number>(dcfGrowthDefault);
   const [terminalPct, setTerminalPct] = useState<number>(
     TERMINAL_GROWTH_RATE * 100,
   );
@@ -80,9 +110,7 @@ function DashboardInner({ data }: ValuationDashboardProps) {
 
   // DDM
   const [dps, setDps] = useState<number>(fin.dps ?? 0);
-  const [divGrowthPct, setDivGrowthPct] = useState<number>(
-    DEFAULT_GROWTH_RATE * 100,
-  );
+  const [divGrowthPct, setDivGrowthPct] = useState<number>(ddmGrowthDefault);
   const [requiredReturnPct, setRequiredReturnPct] =
     useState<number>(capmRatePct);
 
@@ -168,10 +196,12 @@ function DashboardInner({ data }: ValuationDashboardProps) {
   function onSectorChange(s: Sector) {
     setSector(s);
     const p = SECTOR_PRESETS[s];
-    setGrowthPct(DEFAULT_GROWTH_RATE * 100);
+    setGrowthPct(
+      deriveSustainableGrowth(s, initialRoe, initialPayout).growthRate * 100,
+    );
     setTerminalPct(TERMINAL_GROWTH_RATE * 100);
     setDiscountPct(capmRatePct);
-    setDivGrowthPct(DEFAULT_GROWTH_RATE * 100);
+    setDivGrowthPct(deriveDdmGrowthPct(s));
     setRequiredReturnPct(capmRatePct);
     setPeLow(p.peLow);
     setPeBase(p.peBase);
@@ -422,6 +452,13 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                       onChange={setGrowthPct}
                       format={(v) => formatPercentPts(v, 1)}
                     />
+                    <div className="text-[11px] text-muted-foreground">
+                      {t("growth.dynamic")}:{" "}
+                      {dcfGrowthIsRoe
+                        ? t("growth.source.roe")
+                        : t("growth.source.preset")}{" "}
+                      {formatPercentPts(dcfGrowthDefault, 2)}
+                    </div>
                     <AssumptionSlider
                       label={t("dcf.terminal")}
                       value={terminalPct}
@@ -491,6 +528,13 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                       onChange={setDivGrowthPct}
                       format={(v) => formatPercentPts(v, 1)}
                     />
+                    <div className="text-[11px] text-muted-foreground">
+                      {t("growth.dynamic")}:{" "}
+                      {ddmGrowthIsRoe
+                        ? t("growth.source.roe")
+                        : t("growth.source.preset")}{" "}
+                      {formatPercentPts(ddmGrowthDefault, 2)}
+                    </div>
                     <AssumptionSlider
                       label={t("ddm.required")}
                       value={requiredReturnPct}
@@ -568,6 +612,52 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                 />
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("beta.title")}</CardTitle>
+                <CardDescription>{t("beta.chart.title")}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                  <span className="text-sm text-muted-foreground">
+                    {t("beta.value")}
+                  </span>
+                  <span className="font-mono text-2xl font-bold tabular-nums">
+                    {beta.toFixed(2)}
+                  </span>
+                  <Badge
+                    variant={
+                      betaAudit?.source === "quant_regression"
+                        ? "buy"
+                        : "secondary"
+                    }
+                  >
+                    {t(
+                      betaAudit?.source === "quant_regression"
+                        ? "beta.source.quant_regression"
+                        : "beta.source.sector_fallback",
+                    )}
+                  </Badge>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {t("beta.raw")}:{" "}
+                  <span className="font-mono tabular-nums">
+                    {betaAudit?.rawBeta != null
+                      ? betaAudit.rawBeta.toFixed(2)
+                      : t("stock.na")}
+                  </span>
+                  {betaAudit?.blumeAdjusted
+                    ? ` · ${t("beta.blume")}`
+                    : ""}
+                </div>
+                <BetaChart
+                  regression={betaAudit?.regression ?? []}
+                  rawBeta={betaAudit?.rawBeta ?? null}
+                  source={betaAudit?.source ?? "sector_fallback"}
+                />
+              </CardContent>
+            </Card>
           </div>
 
           {/* Right column */}
@@ -609,7 +699,6 @@ function DashboardInner({ data }: ValuationDashboardProps) {
                   recommended={result.primary === "pe"}
                   active={activeModel === "pe"}
                   applicable={result.pe?.applicable ?? false}
-                  naReason={t("pe.notApplicable")}
                   fairValue={result.pe?.fairValueBase ?? 0}
                   upsidePct={result.pe?.upsidePct ?? 0}
                   marginOfSafetyPct={result.pe?.marginOfSafetyPct ?? 0}
