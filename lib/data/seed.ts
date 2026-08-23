@@ -32,10 +32,22 @@ export interface Financials {
   fcf: number | null; // RM millions
   sharesOutstanding: number | null; // millions
   netDebt: number | null; // RM millions (null = unknown → 0)
+  roe: number | null; // decimal (e.g. 0.1133) — used for endogenous growth
+  payoutRatio: number | null; // decimal (e.g. 0.73) — used for endogenous growth
   quality: FinancialDataQuality;
   isFallback: boolean; // true when seed/estimated (amber badge)
   insufficientDcf: boolean; // FCF or shares missing → DCF disabled
   insufficientDdm: boolean; // no dividend → DDM disabled
+}
+
+/** Beta audit + regression series, computed from historical K-line vs ^KLSE. */
+export interface BetaAudit {
+  beta: number; // final (Blume-adjusted, sector-clamped) beta
+  rawBeta: number | null; // raw regression slope (null when sector fallback)
+  source: "quant_regression" | "sector_fallback";
+  benchmark: string; // "^KLSE"
+  blumeAdjusted: boolean;
+  regression: { marketReturn: number; stockReturn: number }[]; // monthly returns
 }
 
 export interface StockData {
@@ -44,6 +56,7 @@ export interface StockData {
   quote: YahooQuote;
   seed: StockSeed | null;
   financials: Financials;
+  betaAudit?: BetaAudit; // K-line regression beta (^KLSE) + scatter series
   source: "yahoo" | "fmp" | "seed";
   dataSources: {
     yahoo: boolean;

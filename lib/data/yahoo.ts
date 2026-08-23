@@ -1,6 +1,11 @@
-import { normalizeTicker, toBursaCode, SECTOR_LABEL } from "@/lib/bursa";
+import {
+  normalizeTicker,
+  toBursaCode,
+  SECTOR_LABEL,
+} from "@/lib/bursa";
 import {
   SEED_MAP,
+  type BetaAudit,
   type FinancialDataQuality,
   type Financials,
   type StockData,
@@ -11,6 +16,8 @@ import { fetchFmpQuote } from "./fmp";
 import { agreementOf, pickMedian } from "./arbitrate";
 import syncedJson from "./bursa-stocks.json";
 import type { Sector } from "@/lib/valuation/types";
+import { getAccurateBursaBeta } from "@/lib/valuation/bursa-beta";
+import { resolveSector } from "@/lib/valuation/balance-sheet-cleaner";
 
 interface SyncedStockJson {
   code: string;
@@ -57,6 +64,8 @@ interface LiveFundamentals {
   sharesOutstanding: number | null; // millions
   beta: number | null;
   fcf: number | null; // RM millions
+  roe: number | null; // decimal
+  payoutRatio: number | null; // decimal
   sector: string | null;
 }
 
@@ -132,6 +141,12 @@ async function fetchViaYahooFinance2(
       ?? num((qs.defaultKeyStatistics as Record<string, unknown>)?.freeCashflow);
 
     const sectorVal = (qs.assetProfile as Record<string, unknown>)?.sector;
+    const roe = num(
+      (qs.financialData as Record<string, unknown>)?.returnOnEquity,
+    );
+    const payoutRatio = num(
+      (qs.summaryDetail as Record<string, unknown>)?.payoutRatio,
+    );
 
     return {
       price,
@@ -144,6 +159,8 @@ async function fetchViaYahooFinance2(
         sharesAbs != null && sharesAbs > 0 ? sharesAbs / 1e6 : null,
       beta,
       fcf: fcfAbs != null && isFinite(fcfAbs) ? fcfAbs / 1e6 : null,
+      roe,
+      payoutRatio,
       sector: typeof sectorVal === "string" ? sectorVal : null,
     };
   } catch {
@@ -297,6 +314,18 @@ function seedToQuote(seed: StockSeed): YahooQuote {
 // Orchestration with robust fallback chain
 // ---------------------------------------------------------------------------
 
+async function computeBetaAudit(ticker: string, sector: Sector): Promise<BetaAudit> {
+  const res = await getAccurateBursaBeta(ticker, sector);
+  return {
+    beta: res.beta,
+    rawBeta: res.rawCalculatedBeta ?? null,
+    source: res.source,
+    benchmark: "^KLSE",
+    blumeAdjusted: res.source === "quant_regression",
+    regression: res.regression ?? [],
+  };
+}
+
 export async function getStockData(rawTicker: string): Promise<StockData> {
   const code = toBursaCode(rawTicker);
   const seed = SEED_MAP[code] ?? null;
@@ -317,10 +346,28 @@ export async function getStockData(rawTicker: string): Promise<StockData> {
   }
 
   // Fast path: fundamentals come from the pre-synced JSON (zero latency);
-  // only the lightweight live price is fetched on demand.
+  // only the lightweight live price + beta regression are fetched on demand.
   if (synced) {
     const yahoo = cachedYahoo ?? (await fetchYahooQuote(rawTicker));
     const price = yahoo?.price ?? synced.price;
+
+    // Sector: TradingView's scanner reports REITs as "general" and omits
+    // dividend data (dps=0) for them. Resolve via name/ticker, then enrich
+    // live DPS / ROE / payout when the synced row is missing them.
+    const sectorEnum: Sector =
+      seed?.sector ?? resolveSector(code, synced.name, synced.sector);
+    const needsLive =
+      sectorEnum === "reit" || synced.dps == null || synced.dps <= 0;
+    const live = needsLive ? await fetchViaYahooFinance2(rawTicker) : null;
+
+    let dps = synced.dps;
+    if ((dps == null || dps <= 0) && live?.dps != null && live.dps > 0) {
+      dps = live.dps;
+    }
+    const roe = live?.roe ?? null;
+    const payoutRatio = live?.payoutRatio ?? null;
+
+    const betaAudit = await computeBetaAudit(ticker, sectorEnum);
 
     const quote: YahooQuote = {
       ticker,
@@ -335,9 +382,9 @@ export async function getStockData(rawTicker: string): Promise<StockData> {
       eps: synced.eps,
       pe: synced.pe,
       dividendYieldPct: synced.dividendYieldPct,
-      sector: SECTOR_LABEL[synced.sector as Sector] ?? synced.sector,
-      beta: synced.beta,
-      dps: synced.dps,
+      sector: SECTOR_LABEL[sectorEnum],
+      beta: betaAudit.beta,
+      dps,
       fcf: synced.fcf,
       shares: synced.shares,
     };
@@ -347,10 +394,12 @@ export async function getStockData(rawTicker: string): Promise<StockData> {
       pe: synced.pe,
       dividendYieldPct:
         synced.dividendYieldPct > 0 ? synced.dividendYieldPct : null,
-      dps: synced.dps,
+      dps,
       fcf: synced.fcf,
       sharesOutstanding: synced.shares,
       netDebt: seed?.netDebt ?? 0,
+      roe,
+      payoutRatio,
       quality: synced.fcfEstimated ? "estimated" : "live",
       isFallback: synced.fcfEstimated,
       insufficientDcf:
@@ -358,7 +407,7 @@ export async function getStockData(rawTicker: string): Promise<StockData> {
         synced.shares == null ||
         synced.fcf <= 0 ||
         synced.shares <= 0,
-      insufficientDdm: synced.dps == null || synced.dps <= 0,
+      insufficientDdm: dps == null || dps <= 0,
     };
 
     return {
@@ -367,6 +416,7 @@ export async function getStockData(rawTicker: string): Promise<StockData> {
       quote,
       seed,
       financials,
+      betaAudit,
       source: yahoo ? "yahoo" : "seed",
       dataSources: {
         yahoo: !!yahoo,
@@ -407,8 +457,11 @@ export async function getStockData(rawTicker: string): Promise<StockData> {
   const price = vf2?.price ?? yahoo?.price ?? fmp?.price ?? seed?.price ?? 0;
   const marketCap =
     vf2?.marketCap ?? fmp?.marketCap ?? yahoo?.marketCap ?? 0;
-  const beta = vf2?.beta ?? seed?.beta ?? 1;
-  const sectorLabel = seed ? SECTOR_LABEL[seed.sector] : vf2?.sector ?? null;
+  const sectorEnum: Sector =
+    seed?.sector ??
+    resolveSector(code, seed?.name ?? yahoo?.name ?? fmp?.name ?? "", vf2?.sector ?? "");
+
+  const betaAudit = await computeBetaAudit(ticker, sectorEnum);
 
   // Shares outstanding (millions); derive from marketCap / price if missing.
   let sharesM: number | null =
@@ -462,8 +515,8 @@ export async function getStockData(rawTicker: string): Promise<StockData> {
     eps,
     pe,
     dividendYieldPct,
-    sector: sectorLabel,
-    beta,
+    sector: SECTOR_LABEL[sectorEnum],
+    beta: betaAudit.beta,
     dps,
     fcf,
     shares: sharesM,
@@ -477,6 +530,8 @@ export async function getStockData(rawTicker: string): Promise<StockData> {
     fcf,
     sharesOutstanding: sharesM,
     netDebt: seed?.netDebt ?? 0,
+    roe: vf2?.roe ?? null,
+    payoutRatio: vf2?.payoutRatio ?? null,
     quality,
     isFallback: quality === "seed" || quality === "estimated",
     insufficientDcf:
@@ -490,6 +545,7 @@ export async function getStockData(rawTicker: string): Promise<StockData> {
     quote,
     seed,
     financials,
+    betaAudit,
     source,
     dataSources,
     epsAgreement,
