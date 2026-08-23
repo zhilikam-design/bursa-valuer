@@ -24,9 +24,9 @@ export interface RunValuationInput {
 
 /**
  * Run all three models and produce a unified result.
- * The "primary" model is selected by sector (banks/REITs/utilities -> DDM,
- * tech/consumer -> PE band, otherwise DCF), with a fallback chain that picks
- * the first applicable model when the preferred one has insufficient data.
+ * The "primary" model is selected by sector (banks/REITs -> DDM,
+ * tech/consumer -> PE band, otherwise DCF), matching the BursaValuer
+ * algorithm-modularization spec.
  */
 export function runValuation(input: RunValuationInput): ValuationResult {
   const { price, sector, dcf, ddm, pe } = input;
@@ -35,6 +35,7 @@ export function runValuation(input: RunValuationInput): ValuationResult {
   const ddmRes: DdmResult | null = computeDdm(ddm, price);
   const peRes: PeBandResult | null = computePeBand(pe, price);
 
+  // Preferred model order by sector; pick the first applicable one.
   const preferred = SECTOR_PRESETS[sector]?.primaryModel ?? "dcf";
   const order: ModelId[] =
     preferred === "ddm"
@@ -95,7 +96,18 @@ export function runValuation(input: RunValuationInput): ValuationResult {
 export { computeDcf, dcfSensitivity } from "./dcf";
 export { computeDdm, sustainableGrowth } from "./ddm";
 export { computePeBand } from "./pe-band";
+export { calculateDynamicDDM } from "./dynamic-ddm";
+export { calculateDCFValuation, deriveSustainableGrowth } from "./dynamic-dcf";
 export { verdictFromUpside, upsidePct, marginOfSafetyPct } from "./verdict";
+export type {
+  DDMFinancials,
+  DDMResult as DynamicDDMResult,
+} from "./dynamic-ddm";
+export type {
+  ValuationFinancials,
+  DCFValuationResult,
+  DCFProjectionYear,
+} from "./dynamic-dcf";
 export type {
   ModelId,
   Sector,
