@@ -20,6 +20,12 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { TICKER_ALIASES, normalizeSector } from "../lib/bursa";
 import { SEED_MAP } from "../lib/data/seed";
+import {
+  resolveBursaCode,
+  mapWithConcurrency,
+  knownCode,
+  isNumericCode,
+} from "../lib/data/bursa-code";
 
 const TV_SCAN_URL = "https://scanner.tradingview.com/malaysia/scan";
 
@@ -63,13 +69,6 @@ function clampBeta(b: number | null): number {
   return b != null && isFinite(b) && b > 0.2 && b <= 2.5 ? b : 1.0;
 }
 
-function codeOfTicker(ticker: string): string {
-  const t = ticker.toUpperCase();
-  if (CODE_BY_TICKER[t]) return CODE_BY_TICKER[t];
-  if (/^\d{4}$/.test(t)) return t;
-  return t;
-}
-
 async function runTradingViewSync() {
   console.log("📡 Fetching complete Bursa Malaysia universe from TradingView Scanner API...");
   const payload = {
@@ -104,8 +103,27 @@ async function runTradingViewSync() {
   const rawList = json.data ?? [];
   console.log(`✅ Fetched ${rawList.length} Malaysian stocks from TradingView.`);
 
+  // Optional --limit=N for quick/partial syncs (e.g. testing).
+  const limitArg = process.argv.find((a) => a.startsWith("--limit="));
+  const limit = limitArg ? parseInt(limitArg.slice(8), 10) : undefined;
+  const toSync = limit != null ? rawList.slice(0, limit) : rawList;
+
+  // Resolve numeric Bursa codes via Yahoo search (TradingView only gives ticker
+  // names; Yahoo cross-validation needs the numeric code). Concurrency-limited.
+  console.log(`🔎 Resolving Bursa numeric codes via Yahoo search (${toSync.length} stocks)...`);
+  const codes = await mapWithConcurrency(toSync, 6, async (item) => {
+    const rawTicker = String(item.d[0] ?? "").trim().toUpperCase();
+    if (!rawTicker) return rawTicker;
+    const description = String(item.d[1] ?? rawTicker);
+    const known = knownCode(rawTicker, CODE_BY_TICKER);
+    if (known) return known;
+    return await resolveBursaCode(rawTicker, description, CODE_BY_TICKER);
+  });
+
   const stocks: Record<string, SyncedStock> = {};
-  for (const item of rawList) {
+  let numericResolved = 0;
+  for (let i = 0; i < toSync.length; i++) {
+    const item = toSync[i];
     const d = item.d;
     const rawTicker = String(d[0] ?? "").trim().toUpperCase();
     if (!rawTicker) continue;
@@ -120,7 +138,8 @@ async function runTradingViewSync() {
     const beta = num(d[8]);
     const totalShares = num(d[9]);
 
-    const code = codeOfTicker(rawTicker);
+    const code = codes[i];
+    if (isNumericCode(code) && code !== rawTicker) numericResolved++;
     const seed = SEED_MAP[code] ?? null;
 
     const price = close != null && close > 0 ? close : seed?.price ?? 0;
@@ -183,7 +202,14 @@ async function runTradingViewSync() {
     }
   }
 
-  const outPath = join(process.cwd(), "lib", "data", "bursa-stocks.json");
+  console.log(
+    `✅ Resolved numeric codes for ${numericResolved}/${toSync.length} stocks (enables Yahoo cross-validation).`,
+  );
+
+  const outArg = process.argv.find((a) => a.startsWith("--out="));
+  const outPath = outArg
+    ? outArg.slice(6)
+    : join(process.cwd(), "lib", "data", "bursa-stocks.json");
   const output = {
     generatedAt: new Date().toISOString(),
     count: Object.keys(stocks).length,
